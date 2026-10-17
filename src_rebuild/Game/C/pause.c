@@ -191,6 +191,12 @@ void ToggleInfiniteMass(int direction)
 	gInfiniteMass ^= 1;
 }
 
+void ToggleSpeedBoost(int direction)
+{
+	extern int gSpeedBoost;
+	gSpeedBoost ^= 1;
+}
+
 void ToggleFlyingCar(int direction)
 {
 	extern int gFlyingCar;
@@ -319,6 +325,7 @@ MENU_ITEM DebugJustForFunItems[] =
 	{ "Jericho Mode",	PAUSE_TYPE_FUNC,	2,  ToggleJerichoMode,	MENU_QUIT_NONE,		NULL },
 	{ "Flying Car",		PAUSE_TYPE_FUNC,	2,  ToggleFlyingCar,	MENU_QUIT_NONE,		NULL },
 	{ "Infinite Mass",	PAUSE_TYPE_FUNC,	2,  ToggleInfiniteMass,	MENU_QUIT_NONE,		NULL },
+	{ "Speed Boost Horn",	PAUSE_TYPE_FUNC,	2,  ToggleSpeedBoost,	MENU_QUIT_NONE,		NULL },
 	{ "Chopper",		PAUSE_TYPE_FUNC,	2,  ToggleChopper,		MENU_QUIT_NONE,		NULL },
 	{ NULL, PAUSE_TYPE_ENDITEMS, 0u, NULL, MENU_QUIT_NONE, NULL }
 };

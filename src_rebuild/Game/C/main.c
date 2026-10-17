@@ -1796,6 +1796,15 @@ void DrawGame(void)
 #endif
 
 #if defined(DEBUG_OPTIONS) && !defined(PSX)
+	{
+		extern void DumpCameraState(void);
+
+		static int dumpTick;
+
+		if (paused && dumpTick++ % 10 == 0)
+			DumpCameraState();
+	}
+
 	if (gPlayLog && (FrameCnt % 30 == 0 || gPlayLogMark) && player[0].playerType != PLAYER_TYPE_NONE)
 	{
 		extern int g_vertexPeak;

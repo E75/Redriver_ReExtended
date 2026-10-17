@@ -2265,6 +2265,16 @@ int GetBridgeRotation(int timer)
 	if (gDisableChicagoBridges)
 		return 0;
 
+#if defined(DEBUG_OPTIONS) && !defined(PSX)
+	{
+		// test hook: all lifting bridges stand at this timer value (1000 = fully raised)
+		const char* forced = getenv("REDRIVER2_BRIDGETIMER");
+
+		if (forced)
+			timer = atoi(forced);
+	}
+#endif
+
 	if (timer > 2600)
 		return 0;
 

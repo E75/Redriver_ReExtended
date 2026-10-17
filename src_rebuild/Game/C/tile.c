@@ -8,6 +8,7 @@
 #include "camera.h"
 #include "dr2roads.h"
 #include "overmap.h"
+#include "event.h"
 
 #include <stdlib.h>
 
@@ -488,8 +489,12 @@ void DrawTILES(PACKED_CELL_OBJECT** tiles, int tile_amount)
 
 #ifndef PSX
 	plotContext.ptexture_pages = (ushort(*)[128])texture_pages;
-	DrawWaterBackdrop();
-	DrawGroundBackdrop();
+	// the map is also drawn inside the tilted camera of a lifting bridge or ferry (events.camera): the backdrops would tilt with it
+	if (!events.camera)
+	{
+		DrawWaterBackdrop();
+		DrawGroundBackdrop();
+	}
 #endif
 }
 
@@ -608,8 +613,13 @@ static void DrawFlatWaterQuad(int x0, int z0, int size, int depth)
 	plotContext.primptr += sizeof(POLY_F4);
 }
 
+// CompoundMatrix[0] only holds this frame's camera matrix when an object of yaw 0 was found: the backdrops keep their own
+static MATRIX2 sBackdropMatrix;
+
 void DrawWaterBackdrop(void)
 {
+	*(MATRIX*)&sBackdropMatrix = inv_camera_matrix;
+
 	static int sModel = -1, sLevel = -1;
 	static int sCell, sCentreX, sCentreZ;
 	static int sOff = -1, sRed = -1;
@@ -696,7 +706,7 @@ void DrawWaterBackdrop(void)
 			if (previous)
 				Z = Apply_InvCameraMatrixSetTrans((VECTOR_NOPAD*)plotContext.scribble);
 			else
-				Z = Apply_InvCameraMatrixAndSetMatrix((VECTOR_NOPAD*)plotContext.scribble, &CompoundMatrix[0]);
+				Z = Apply_InvCameraMatrixAndSetMatrix((VECTOR_NOPAD*)plotContext.scribble, &sBackdropMatrix);
 
 			previous = 1;
 
@@ -1257,6 +1267,8 @@ void ProcessLowDetailTable(char *lump_ptr, int lump_size)
 
 void DrawGroundBackdrop(void)
 {
+	*(MATRIX*)&sBackdropMatrix = inv_camera_matrix;
+
 	static int sOff = -1;
 	static int sLevel = -1, sAcross, sDown, sFrame;
 	static int* sHeight = NULL;			// lowest height (engine convention, up is positive) per cell
@@ -1347,7 +1359,7 @@ void DrawGroundBackdrop(void)
 			if (previous)
 				Z = Apply_InvCameraMatrixSetTrans((VECTOR_NOPAD*)plotContext.scribble);
 			else
-				Z = Apply_InvCameraMatrixAndSetMatrix((VECTOR_NOPAD*)plotContext.scribble, &CompoundMatrix[0]);
+				Z = Apply_InvCameraMatrixAndSetMatrix((VECTOR_NOPAD*)plotContext.scribble, &sBackdropMatrix);
 
 			previous = 1;
 

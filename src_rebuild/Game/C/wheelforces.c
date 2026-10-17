@@ -10,6 +10,7 @@
 #include "map.h"
 #include "mission.h"
 #include "pad.h"
+#include "players.h"
 #include "sound.h"
 #include "glaunch.h"
 #include "system.h"
@@ -541,6 +542,7 @@ void AddWheelForcesDriver1(CAR_DATA* cp, CAR_LOCALS* cl)
 
 int gFlyingCar = 0;		// cheat, toggled with F8 or the debug menu
 int gInfiniteMass = 0;	// cheat, toggled with F6 or the debug menu (used in handling.c)
+int gSpeedBoost = 0;	// cheat (Fun Cheats menu): the horn pushes the player car forward
 int gFlyAscend = 0;		// held keys (left shift / left ctrl)
 int gFlyDescend = 0;
 int gFlyTestUp = 0;		// -flytest: forced climb (-128..128) for test runs
@@ -631,6 +633,24 @@ static void StepFlyingCar(CAR_DATA* cp)
 		cp->hd.acc[1] -= cp->st.n.linearVelocity[1] >> 4;	// hover
 }
 
+#define BOOST_THRUST	60000	// extra acceleration along the nose while the horn is held (the engine gives about 7200)
+
+// Speed Boost cheat: holding the horn adds a strong push along the car's heading
+static void StepSpeedBoost(CAR_DATA* cp)
+{
+	int p;
+
+	for (p = 0; p < 2; p++)
+	{
+		if (player[p].playerType == PLAYER_TYPE_CAR && player[p].playerCarId >= 0 && &car_data[player[p].playerCarId] == cp && player[p].horn.on)
+		{
+			cp->hd.acc[0] += FIXEDH(RSIN(cp->hd.direction) * WORLD_FORCE(BOOST_THRUST));
+			cp->hd.acc[2] += FIXEDH(RCOS(cp->hd.direction) * WORLD_FORCE(BOOST_THRUST));
+			return;
+		}
+	}
+}
+
 // no tyre forces or sounds while flying; the wheels just follow the speed so the engine pitch matches
 static void FlyingCarWheels(CAR_DATA* cp)
 {
@@ -694,6 +714,8 @@ void StepOneCar(CAR_DATA* cp)
 
 	if (flying)
 		StepFlyingCar(cp);
+	else if (gSpeedBoost && cp->controlType == CONTROL_TYPE_PLAYER)
+		StepSpeedBoost(cp);
 
 	// calculate car speed
 	a = ABS(FIXEDH(_cl.vel[0]));

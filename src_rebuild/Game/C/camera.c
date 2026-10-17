@@ -716,6 +716,31 @@ static void UpdateCameraOrbit(PLAYER* lp)
 		lp->camPitch = MAX(CAMORBIT_PITCH_MIN, MIN(lp->camPitch + dpitch, CAMORBIT_PITCH_MAX));
 	}
 
+#if defined(DEBUG_OPTIONS) && !defined(PSX)
+	{
+		// test hooks: REDRIVER2_CAMPITCH / REDRIVER2_CAMYAW pin the orbit offsets (units, 4096 = 360 degrees)
+		const char* envPitch = getenv("REDRIVER2_CAMPITCH");
+		const char* envYaw = getenv("REDRIVER2_CAMYAW");
+
+		if (envPitch)
+		{
+			lp->camPitch = atoi(envPitch);
+			moved = 1;
+		}
+
+		if (envYaw)
+			lp->camYaw = atoi(envYaw);
+
+		if (getenv("REDRIVER2_CAMSWEEP"))
+		{
+			extern int gDrawStats[4];
+
+			lp->camYaw = (FrameCnt * 8) % 4096 - 2048;
+			printInfo("SWEEP yaw %d pitch %d tiles %d buildings %d cars %d" "\n", lp->camYaw, lp->camPitch, gDrawStats[0], gDrawStats[1], num_cars_drawn);
+		}
+	}
+#endif
+
 	if (moved || lookHeld)
 		lp->camIdle = 0;
 	else if (lp->camIdle < 255)
@@ -752,6 +777,32 @@ static void UpdateCameraOrbit(PLAYER* lp)
 
 	lp->camLook = CamOrbitEase(lp->camLook, lookBack ? CAMORBIT_LOOK_BACK : 0);
 }
+
+
+#if defined(DEBUG_OPTIONS) && !defined(PSX)
+// Paused with the camera in a bad spot: writes CAMSTATE.txt (working directory) with the exact camera angles in units and degrees.
+void DumpCameraState(void)
+{
+	extern int gDrawStats[4];
+	extern int CellInLoadedArea(int cellx, int cellz);
+	PLAYER* lp = &player[0];
+	FILE* f = fopen("CAMSTATE.txt", "w");
+
+	if (!f)
+		return;
+
+	fprintf(f, "frame %d city %d\n", FrameCnt, GameLevel);
+	fprintf(f, "player pos %d %d %d\n", lp->pos[0], lp->pos[1], lp->pos[2]);
+	fprintf(f, "camera pos %d %d %d (height above ground %d)\n", camera_position.vx, camera_position.vy, camera_position.vz, -camera_position.vy - MapHeight(&camera_position));
+	fprintf(f, "camera angle units (4096 = 360): x %d y %d z %d\n", camera_angle.vx, camera_angle.vy, camera_angle.vz);
+	fprintf(f, "camera angle degrees: x %d y %d z %d\n", camera_angle.vx * 360 / 4096, camera_angle.vy * 360 / 4096, camera_angle.vz * 360 / 4096);
+	fprintf(f, "orbit: yaw %d (%d deg) pitch %d (%d deg) look %d idle %d dist %d view %d car %d foot %d\n", lp->camYaw, lp->camYaw * 360 / 4096, lp->camPitch, lp->camPitch * 360 / 4096,
+		lp->camLook, lp->camIdle, lp->cameraDist, lp->cameraView, lp->cameraCarId, lp->camFoot);
+	fprintf(f, "orbit on %d mouse %d  draw mode %d  tiles %d buildings %d\n", gCameraOrbit, gCameraMouse, gDrawDistanceMode, gDrawStats[0], gDrawStats[1]);
+	fprintf(f, "cell %d %d  inarea %d\n", current_cell_x, current_cell_z, CellInLoadedArea(current_cell_x, current_cell_z));
+	fclose(f);
+}
+#endif
 
 short gCameraDistance = 1000;
 short gCameraMaxDistance = 0;
