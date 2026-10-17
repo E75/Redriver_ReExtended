@@ -237,12 +237,13 @@ int ForeignPageId(int i)
 }
 
 // the polygons of a model of the foreign city name its two car pages by that city's numbers
-void ForeignRemapModel(MODEL* polySrc)
+// the polygons of a car model name its two car pages by src1 / src2: they get the page numbers dest1 / dest2
+void RemapModelPages(MODEL* polySrc, int src1, int src2, int dest1, int dest2)
 {
 	PL_POLYFT4* polys;
 	int i, ptype;
 
-	if (!gForeignSpool || polySrc == NULL)
+	if (polySrc == NULL)
 		return;
 
 	polys = GET_RELOC_MODEL_DATA(PL_POLYFT4, polySrc, poly_block);
@@ -253,14 +254,21 @@ void ForeignRemapModel(MODEL* polySrc)
 
 		if (ptype == 10 || ptype == 11 || ptype == 20 || ptype == 21 || ptype == 22 || ptype == 23)
 		{
-			if (polys->texture_set == foreignSrc[0])
-				polys->texture_set = FOREIGN_PAGE1;
-			else if (polys->texture_set == foreignSrc[1])
-				polys->texture_set = FOREIGN_PAGE2;
+			if (polys->texture_set == src1)
+				polys->texture_set = dest1;
+			else if (polys->texture_set == src2)
+				polys->texture_set = dest2;
 		}
 
 		polys = (PL_POLYFT4*)((char*)polys + PolySizes[ptype]);
 	}
+}
+
+// the polygons of a model of the foreign city name its two car pages by that city's numbers
+void ForeignRemapModel(MODEL* polySrc)
+{
+	if (gForeignSpool)
+		RemapModelPages(polySrc, foreignSrc[0], foreignSrc[1], FOREIGN_PAGE1, FOREIGN_PAGE2);
 }
 
 #endif // !PSX

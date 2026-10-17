@@ -1146,7 +1146,7 @@ void ProcessCarPad(CAR_DATA* cp, u_int pad, char PadSteer, char use_analogue)
 	if (cp->controlType == CONTROL_TYPE_PLAYER)
 	{
 		// handle car leaving
-		if ((pad & CAR_PAD_LEAVECAR) == CAR_PAD_LEAVECAR && player_id > -1 && gCarSpawner != 1)
+		if ((pad & CAR_PAD_LEAVECAR) == CAR_PAD_LEAVECAR && player_id > -1 && !CarSpawnerBlocksExit())
 		{
 			if (!TannerStuckInCar(1, player_id) && ChopperCanLeave())
 			{

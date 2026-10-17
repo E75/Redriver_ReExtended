@@ -1,4 +1,5 @@
 #include "driver2.h"
+
 #include "carspawner.h"
 #include "allcars.h"
 #include "chopper.h"
@@ -16,6 +17,7 @@
 #include "dr2roads.h"
 #include "pad.h"
 #include "main.h"
+#include "shadow.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,9 +36,14 @@ extern int gCantDrive;
 extern int gCamAngleOverride;
 extern int allowSpecSpooling;
 extern char* LevelNames[];
+extern int PolySizes[56];
+extern char* ReadFilePart(FILE* f, int offset, int size);
+extern char* FindLevelLump(char* area, int areaSize, int type);
 extern int GetNodePos(DRIVER2_STRAIGHT* straight, DRIVER2_JUNCTION* junction, DRIVER2_CURVE* curve, int distAlongPath, CAR_DATA* cp, int* x, int* z, int laneNo);
 
-#define MAX_SPAWN_CARS	24
+#define MAX_SPAWN_CARS	48
+#define LUMP_CAR_MODELS_TYPE	28
+#define LUMP_TEXTUREINFO_TYPE	34
 #define SPOT_STEP		1500
 #define SPOT_RINGS		9
 
@@ -53,6 +60,12 @@ static SPAWN_CAR spawnList[MAX_SPAWN_CARS];
 static int spawnCount = 0;
 static int spawnIndex = 0;
 static int spawnFrame = 0;
+static int slotCity = -1;		// the car in the special slot: its city and model, unknown (-1) after a level load
+static int slotModel = -1;
+static int slotFrame = 0;
+static char* importedLump = NULL;	// car models lump of another Driver 1 city: the loaded model points into it
+static int spawnExitBlock = 0;	// the confirming Enter (R3) also leaves a car: ignored for a moment after the mode ends
+static int spawnPlaced = 0;		// the player is on the spot
 static int spawnPending = -1;		// start the showroom at this car at the next step, -1 = none
 static int spawnAuto = 0;			// test: 1 presses right, 2 presses start, 40 steps into the showroom
 static int spawnX, spawnZ, spawnDir;
@@ -87,6 +100,19 @@ static void BuildList(void)
 		{
 			sprintf(name, "Player car %d", i + 1);
 			AddCar(GameLevel, FIRST_D1_PLAYER_CAR + i, name);
+		}
+
+		// the player cars of the other Driver 1 cities come from their level file
+		for (city = FIRST_DRIVER1_CITY; city < NUM_CITIES; city++)
+		{
+			if (city == GameLevel || D1Dlc_PlayerCars(city) == 0 || !D1Dlc_CityAvailable(city))
+				continue;
+
+			for (i = 0; i < D1Dlc_PlayerCars(city); i++)
+			{
+				sprintf(name, "%s player car %d", LevelNames[city], i + 1);
+				AddCar(city, FIRST_D1_PLAYER_CAR + i, name);
+			}
 		}
 
 		return;
@@ -198,10 +224,183 @@ static int LoadD2SlotData(int model)
 	return 1;
 }
 
+// a player car of another Driver 1 city: its model comes from the car models lump of that level file, its two texture pages
+// are loaded into the special slot as the pages of the foreign car (allcars.c)
+static int ImportD1Car(int city, int model)
+{
+	char path[64];
+	FILE* f;
+	XYPAIR lumps[4];
+	char* area[2] = { NULL, NULL };
+	int areaSize[2];
+	char *carLump, *texInfo, *ptr, *copy = NULL, *pages = NULL, *models;
+	XYPAIR *permList, *specList;
+	int *offsets;
+	MODEL* mdl;
+	u_char* polys;
+	int pageAmount, nPerm, nSpec, lumpSize, permSectors, specSectors, sector, src[2] = { -1, -1 };
+	int i, j, ok = 0;
+
+	if (!D1Dlc_ConvertCity(city - FIRST_DRIVER1_CITY, "", path, sizeof(path)))
+		return 0;
+
+	FS_FixPathSlashes(path);
+	f = fopen(path, "rb");
+
+	if (!f)
+		return 0;
+
+	fseek(f, 8, SEEK_SET);
+
+	if (fread(lumps, sizeof(lumps), 1, f) != 1)
+		goto done;
+
+	areaSize[0] = lumps[CITYLUMP_DATA1].y;
+	areaSize[1] = lumps[CITYLUMP_DATA2].y;
+	area[0] = ReadFilePart(f, lumps[CITYLUMP_DATA1].x, areaSize[0]);
+	area[1] = ReadFilePart(f, lumps[CITYLUMP_DATA2].x, areaSize[1]);
+
+	if (!area[0] || !area[1])
+		goto done;
+
+	carLump = FindLevelLump(area[0], areaSize[0], LUMP_CAR_MODELS_TYPE);
+	texInfo = FindLevelLump(area[0], areaSize[0], LUMP_TEXTUREINFO_TYPE);
+
+	if (!carLump)
+		carLump = FindLevelLump(area[1], areaSize[1], LUMP_CAR_MODELS_TYPE);
+
+	if (!texInfo)
+		texInfo = FindLevelLump(area[1], areaSize[1], LUMP_TEXTUREINFO_TYPE);
+
+	if (!carLump || !texInfo)
+		goto done;
+
+	lumpSize = *(int*)(carLump - 4);
+	copy = (char*)malloc(lumpSize);
+
+	if (!copy)
+		goto done;
+
+	memcpy(copy, carLump, lumpSize);
+
+	// the texture lump (see ProcessTextureInfo): the pages with their textures, then the permanent and the special page list
+	pageAmount = *(int*)texInfo;
+
+	if (pageAmount > 120)
+		goto done;
+
+	ptr = texInfo + 8 + (pageAmount + 1) * sizeof(TP);
+
+	for (i = 0; i < pageAmount; i++)
+		ptr += 4 + *(int*)ptr * sizeof(TEXINF);
+
+	nPerm = *(int*)ptr;
+	permList = (XYPAIR*)(ptr + 4);
+	ptr = (char*)&permList[16];
+	nSpec = *(int*)ptr;
+	specList = (XYPAIR*)(ptr + 4);
+
+	// the two own pages of the car: the pages of its polygons that the level keeps in the special list
+	offsets = (int*)(copy + 4);
+	models = copy + 4 + 160;
+
+	if (offsets[model * 3] == -1)
+		goto done;
+
+	mdl = (MODEL*)(models + offsets[model * 3]);
+	polys = GET_RELOC_MODEL_DATA(u_char, mdl, poly_block);
+
+	for (i = 0; i < mdl->num_polys; i++)
+	{
+		int type = polys[0] & 0x1f;
+
+		if (type >= 20 && type <= 23 && polys[1] != 0xFF)
+		{
+			for (j = 0; j < nSpec; j++)
+			{
+				if (specList[j].x == polys[1] && src[0] != polys[1] && src[1] < 0)
+				{
+					src[src[0] < 0 ? 0 : 1] = polys[1];
+					break;
+				}
+			}
+		}
+
+		polys += PolySizes[type];
+	}
+
+	if (src[0] < 0 || src[1] < 0)
+		goto done;
+
+	// palette counts of the two pages, and the page data: behind the permanent pages, which follow the first data area
+	ptr = texInfo + 8 + (pageAmount + 1) * sizeof(TP);
+
+	for (i = 0; i < pageAmount; i++)
+	{
+		int texAmount = *(int*)ptr;
+
+		for (j = 0; j < 2; j++)
+		{
+			if (i == src[j])
+				tpage_texamts[ForeignPageId(j)] = texAmount;
+		}
+
+		ptr += 4 + texAmount * sizeof(TEXINF);
+	}
+
+	permSectors = 0;
+
+	for (i = 0; i < nPerm; i++)
+		permSectors += (permList[i].y + 2047) / CDSECTOR_SIZE;
+
+	specSectors = 0;
+
+	for (i = 0; i < nSpec; i++)
+		specSectors += (specList[i].y + 2047) / CDSECTOR_SIZE;
+
+	sector = (lumps[CITYLUMP_DATA1].x + lumps[CITYLUMP_DATA1].y) / CDSECTOR_SIZE + permSectors;
+	pages = ReadFilePart(f, sector * CDSECTOR_SIZE, specSectors * CDSECTOR_SIZE);
+
+	if (!pages || !LoadSpecialSlotPages(pages, specList, nSpec, src[0], src[1], ForeignPageId(0), ForeignPageId(1)))
+		goto done;
+
+	if (!LoadCarModelIntoSpecialSlot(model, copy, src[0], src[1]))
+		goto done;
+
+	carTpages[GameLevel][6] = ForeignPageId(0);
+	carTpages[GameLevel][7] = ForeignPageId(1);
+
+	// the model points into the lump copy until the next car replaces it
+	free(importedLump);
+	importedLump = copy;
+	copy = NULL;
+	ok = 1;
+
+done:
+	free(copy);
+	free(pages);
+	free(area[0]);
+	free(area[1]);
+
+	if (f)
+		fclose(f);
+
+	return ok;
+}
+
 // makes 'model' of the car list a resident car; returns 0 when it cannot be loaded
 static int PrepareModel(const SPAWN_CAR* c)
 {
 	int i, model = c->model;
+
+	if (slotModel < 0 || FrameCnt < slotFrame)
+	{
+		// the level started with its own car in the special slot
+		slotCity = GameLevel;
+		slotModel = residentCarModels[SPECIAL_CAR_SLOT];
+	}
+
+	slotFrame = FrameCnt;
 
 	if (model <= 4)
 	{
@@ -211,7 +410,8 @@ static int PrepareModel(const SPAWN_CAR* c)
 				return 1;
 		}
 	}
-	else if (residentCarModels[SPECIAL_CAR_SLOT] == model && c->city == (ForeignCarMode() ? ForeignCarCity() : GameLevel) && gCarCleanModelPtr[SPECIAL_CAR_SLOT])
+
+	if (slotModel == model && slotCity == c->city && gCarCleanModelPtr[SPECIAL_CAR_SLOT])
 		return 1;
 
 	ClearSpecialSlotCars();
@@ -226,13 +426,27 @@ static int PrepareModel(const SPAWN_CAR* c)
 
 	if (IS_DRIVER1_CITY(GameLevel))
 	{
-		if (model >= 8 && !LoadSpecialSlotFromLevel(model))
+		if (c->city != GameLevel)
+		{
+			if (!ImportD1Car(c->city, model))
+				return 0;
+		}
+		else if ((model >= 8 && !LoadSpecialSlotFromLevel(model)) || !LoadCarModelIntoSpecialSlot(model, NULL, -1, -1))
 			return 0;
 
-		if (!LoadCarModelIntoSpecialSlot(model) || !D1PrepareSpecialSlotCosmetics(model))
-			return 0;
+		gD1CarFixCity = c->city;
 
+		if (!D1PrepareSpecialSlotCosmetics(model))
+		{
+			gD1CarFixCity = -1;
+			return 0;
+		}
+
+		gD1CarFixCity = -1;
 		residentCarModels[SPECIAL_CAR_SLOT] = model;
+		D1BuildDamageZones(SPECIAL_CAR_SLOT);
+		slotCity = c->city;
+		slotModel = model;
 		return 1;
 	}
 
@@ -248,15 +462,19 @@ static int PrepareModel(const SPAWN_CAR* c)
 
 		residentCarModels[SPECIAL_CAR_SLOT] = model;
 		QuickSpoolSpecial();
+		slotCity = c->city;
+		slotModel = model;
 		return gCarCleanModelPtr[SPECIAL_CAR_SLOT] != NULL;
 	}
 
 	ForeignCarClear();
 
-	if (!LoadCarModelIntoSpecialSlot(model) || !LoadD2SlotData(model))
+	if (!LoadCarModelIntoSpecialSlot(model, NULL, -1, -1) || !LoadD2SlotData(model))
 		return 0;
 
 	residentCarModels[SPECIAL_CAR_SLOT] = model;
+	slotCity = GameLevel;
+	slotModel = model;
 	return 1;
 }
 
@@ -274,6 +492,7 @@ static int ShowCar(void)
 		return 0;
 	}
 
+	printInfo("car spawner: show %s (model %d), special slot holds %d\n", c->name, c->model, residentCarModels[SPECIAL_CAR_SLOT]);
 	padid = player[0].padid;
 	cp = &car_data[(int)player[0].playerCarId];
 
@@ -282,7 +501,25 @@ static int ShowCar(void)
 	pos[2] = spawnZ;
 	pos[3] = 0;
 
-	InitPlayer(&player[0], cp, CONTROL_TYPE_PLAYER, spawnDir, &pos, c->model, 0, &padid);
+	if (!spawnPlaced)
+	{
+		// the first car: the player and the camera move to the spot
+		InitPlayer(&player[0], cp, CONTROL_TYPE_PLAYER, spawnDir, &pos, c->model, 0, &padid);
+		spawnPlaced = 1;
+	}
+	else
+	{
+		// the next cars keep the player and its camera: only the car is made again in its slot
+		int slot;
+
+		for (slot = 0; slot < MAX_CAR_RESIDENT_MODELS && residentCarModels[slot] != c->model; slot++);
+
+		InitCar(cp, spawnDir, &pos, CONTROL_TYPE_PLAYER, slot, 0, &player[0].padid);
+		ResetTyreTracks(cp, 0);
+		cp->controlFlags |= CONTROL_FLAG_WAS_PARKED | CONTROL_FLAG_PLAYER_START_CAR;
+		player[0].pos[1] = cp->hd.where.t[1];
+	}
+
 	return 1;
 }
 
@@ -319,6 +556,7 @@ static void StartShowroom(int index)
 
 	spawnIndex = (index >= 0 && index < spawnCount) ? index : 0;
 	spawnFrame = 0;
+	spawnPlaced = 0;
 
 	if (ShowCar())
 		gCarSpawner = 1;
@@ -338,9 +576,16 @@ void CarSpawnerCommandLine(int index, int auto_mode)
 static void LeaveShowroom(void)
 {
 	gCarSpawner = 0;
+	spawnExitBlock = FrameCnt + 25;
 	gCantDrive = 0;
 	gCamAngleOverride = 0;
 	Mission.message_timer[0] = 0;
+}
+
+// the player may not get out of the car in the showroom
+int CarSpawnerBlocksExit(void)
+{
+	return gCarSpawner == 1 || FrameCnt < spawnExitBlock;
 }
 
 int CarSpawnerUpdate(int pressed)
@@ -368,13 +613,13 @@ int CarSpawnerUpdate(int pressed)
 	gCantDrive = 1;
 	gCamAngleOverride = 2048 + ((spawnFrame * 6) & 2047);	// the camera circles the car
 
-	sprintf(spawnText, "< %s %d/%d > ENTER", spawnList[spawnIndex].name, spawnIndex + 1, spawnCount);
+	sprintf(spawnText, "< %s %d/%d > A / ENTER", spawnList[spawnIndex].name, spawnIndex + 1, spawnCount);
 	SetMissionMessage(spawnText, 9, 1);
 
 	if (spawnAuto && spawnFrame == 40)
 	{
 		if (spawnAuto == 2)
-			pressed |= MPAD_START;
+			Pads[0].dirnew |= MPAD_CROSS;
 		else
 			Pads[0].dirnew |= MPAD_D_RIGHT;
 
@@ -405,9 +650,17 @@ int CarSpawnerUpdate(int pressed)
 		return 1;
 	}
 
-	if (pressed & MPAD_START)
+	// controller A (cross) or keyboard Enter (R3) confirms the car and ends the mode
+	if (Pads[0].dirnew & (MPAD_CROSS | MPAD_R3))
 	{
 		LeaveShowroom();
+		return 1;
+	}
+
+	// controller Back: the pause menu (Start and Escape open it as always)
+	if (Pads[0].dirnew & MPAD_SELECT)
+	{
+		EnablePause(PAUSEMODE_PAUSE);
 		return 1;
 	}
 

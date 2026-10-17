@@ -315,6 +315,7 @@ void ProcessLumps(char* lump_ptr, int lump_size)
 		{
 			printInfo("LUMP_CAR_MODELS: size: %d\n", seg_size);
 			car_models_lump = (char*)ptr;
+			KeepCarModelsLump((char*)ptr, seg_size);
 		}
 		else if (lump_type == LUMP_MODELS)
 		{
@@ -1552,7 +1553,7 @@ void CheckForPause(void)
 	if (AttractMode == 0 && pauseflag == 0)
 	{
 #ifndef PSX
-		// [A] Car Spawner showroom: left / right change the car, Enter ends the mode instead of pausing
+		// [A] Car Spawner showroom: left / right change the car, A or Enter confirms it
 		if (CarSpawnerUpdate(paddp))
 			return;
 #endif

@@ -1,5 +1,6 @@
 #include "driver2.h"
 #include "camera.h"
+#include "carspawner.h"
 #include "convert.h"
 #include "event.h"
 #include "mission.h"
@@ -471,6 +472,10 @@ static int CameraZoomPercent(PLAYER* lp)
 
 	if (gChopper && lp == &player[0])
 		zoom = MAX(zoom, 180);
+
+	// Car Spawner showroom: a little farther from the car
+	if (gCarSpawner == 1 && lp == &player[0])
+		zoom = zoom * 125 / 100;
 
 	return zoom;
 }

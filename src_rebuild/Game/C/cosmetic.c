@@ -217,6 +217,8 @@ static const D1CarFix sD1CarFixes[] = {
 	{ 7, 12, 120, 14, 0, 44, -58, -45, -53, 1 },
 };
 
+int gD1CarFixCity = -1;	// Car Spawner: the city a Driver 1 car comes from, -1 = the loaded city
+
 static const D1CarFix* FindD1CarFix(int model, int vertices)
 {
 	int j;
@@ -225,7 +227,7 @@ static const D1CarFix* FindD1CarFix(int model, int vertices)
 	{
 		const D1CarFix& fix = sD1CarFixes[j];
 
-		if (fix.city == GameLevel && fix.model == model && (fix.vertices == 0 || fix.vertices == vertices))
+		if (fix.city == (gD1CarFixCity >= 0 ? gD1CarFixCity : GameLevel) && fix.model == model && (fix.vertices == 0 || fix.vertices == vertices))
 			return &fix;
 	}
 

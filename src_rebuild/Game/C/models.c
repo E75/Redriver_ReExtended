@@ -4,6 +4,7 @@
 #include "spool.h"
 #include "mission.h"
 #include "cars.h"
+#include "allcars.h"
 
 #if USE_PC_FILESYSTEM
 extern int gContentOverride;
@@ -13,6 +14,7 @@ MODEL dummyModel = { 0 };
 
 char* modelname_buffer = NULL;
 char *car_models_lump = NULL;
+static char* carModelsCopy = NULL;	// the lump itself is overwritten after the level load
 int gSpecMemReq = 0;	// memory of the special car slot (ProcessCarModelLump), Car Spawner checks a car against it
 
 MODEL* modelpointers[MAX_MODEL_SLOTS];
@@ -415,9 +417,19 @@ int ProcessCarModelLump(char *lump_ptr, int lump_size)
 #ifndef PSX
 extern char* specmallocptr;
 
+// [A] Car Spawner: the car models lump stays in memory (called when the level loads it)
+void KeepCarModelsLump(char* lump, int size)
+{
+	free(carModelsCopy);
+	carModelsCopy = (char*)malloc(size);
+
+	if (carModelsCopy)
+		memcpy(carModelsCopy, lump, size);
+}
+
 // [A] Car Spawner: puts car model 'model_number' (0..12) of the car models lump into the special car slot, like
 // ProcessCarModelLump does at the level load but into the memory of the special slot. 0 when it does not fit.
-int LoadCarModelIntoSpecialSlot(int model_number)
+int LoadCarModelIntoSpecialSlot(int model_number, char* lump, int src1, int src2)
 {
 	int* offsets;
 	char* models_offset;
@@ -426,11 +438,14 @@ int LoadCarModelIntoSpecialSlot(int model_number)
 	volatile char* savedMalloc;
 	int cleanOfs, damOfs, lowOfs, need;
 
-	if (!car_models_lump || model_number < 0 || model_number > 12)
+	if (lump == NULL)
+		lump = carModelsCopy;
+
+	if (!lump || model_number < 0 || model_number > 12)
 		return 0;
 
-	offsets = (int*)(car_models_lump + 4 + model_number * sizeof(int) * 3);
-	models_offset = car_models_lump + 4 + 160;
+	offsets = (int*)(lump + 4 + model_number * sizeof(int) * 3);
+	models_offset = lump + 4 + 160;
 	cleanOfs = offsets[0];
 	damOfs = offsets[1];
 	lowOfs = offsets[2];
@@ -461,6 +476,14 @@ int LoadCarModelIntoSpecialSlot(int model_number)
 	savedMalloc = mallocptr;
 	mallocptr = specmallocptr;
 	whichCP = baseSpecCP;
+
+	if (src1 >= 0)
+	{
+		RemapModelPages((MODEL*)(models_offset + cleanOfs), src1, src2, ForeignPageId(0), ForeignPageId(1));
+
+		if (lowOfs != -1)
+			RemapModelPages((MODEL*)(models_offset + lowOfs), src1, src2, ForeignPageId(0), ForeignPageId(1));
+	}
 
 	mem = models_offset + cleanOfs;
 	model = GetCarModel(mem, (char**)&mallocptr, 1);
