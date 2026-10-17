@@ -14,6 +14,7 @@
 #include "objanim.h"
 #include "system.h"
 #include "cutscene.h"
+#include "denting.h"
 
 extern int gCameraBoxOverlap;
 
@@ -363,10 +364,24 @@ void ApplyDamage(CAR_DATA *cp, char region, int value, char fakeDamage)
 					cp->totalDamage = USHRT_MAX;
 			}
 
+#ifdef PSX
 			*pRegion = value;
+#endif
+			// [A] the other half of the front or rear keeps its shape: damage (and the dent) stays on the side of the impact
 		}
 	}
 }
+
+#ifndef PSX
+// [A] a hit in the middle of the front or the rear (a pole) damages both halves of it
+void MirrorCentreDamage(CAR_DATA* cp, int region, int door, int value)
+{
+	static const char mirror[6] = { 1, 0, 5, 4, 3, 2 };
+
+	if (ABS(door) < cp->ap.carCos->colBox.vx / 3)
+		ApplyDamage(cp, mirror[region], value * 3 / 4, 1);
+}
+#endif
 
 // [D] [T]
 int DamageCar3D(CAR_DATA *cp, LONGVECTOR4* delta, int strikeVel, CAR_DATA *pOtherCar)
@@ -460,6 +475,21 @@ int DamageCar3D(CAR_DATA *cp, LONGVECTOR4* delta, int strikeVel, CAR_DATA *pOthe
 	fakeDamage = (cp->controlType == CONTROL_TYPE_PURSUER_AI && pOtherCar->controlType == CONTROL_TYPE_PURSUER_AI);
 
 	ApplyDamage(cp, region, value, fakeDamage);
+#ifndef PSX
+	MirrorCentreDamage(cp, region, door, value);
+#endif
+
+#ifndef PSX
+	if (!fakeDamage)
+	{
+		// the lever is relative to the centre of mass: back to model space with the car matrix and the cog
+		int lx = FIXEDH(cp->hd.where.m[0][0] * (*delta)[0] + cp->hd.where.m[1][0] * (*delta)[1] + cp->hd.where.m[2][0] * (*delta)[2]);
+		int ly = FIXEDH(cp->hd.where.m[0][1] * (*delta)[0] + cp->hd.where.m[1][1] * (*delta)[1] + cp->hd.where.m[2][1] * (*delta)[2]);
+		int lz = FIXEDH(cp->hd.where.m[0][2] * (*delta)[0] + cp->hd.where.m[1][2] * (*delta)[1] + cp->hd.where.m[2][2] * (*delta)[2]);
+
+		ImpactDent(cp, lx + cp->ap.carCos->cog.vx, ly + cp->ap.carCos->cog.vy, lz + cp->ap.carCos->cog.vz, value);
+	}
+#endif
 
 	player_id = GetPlayerId(cp);
 
@@ -541,6 +571,13 @@ void DamageCar(CAR_DATA *cp, CDATA2D *cd, CRET2D *collisionResult, int strikeVel
 		}
 
 		ApplyDamage(cp, region, value, 0);
+#ifndef PSX
+		MirrorCentreDamage(cp, region, door, value);
+#endif
+
+#ifndef PSX
+		ImpactDent(cp, door, cp->ap.carCos->cog.vy, nose, value);
+#endif
 		CollisionSound(player_id, cp, impact, 0);
 	}
 }

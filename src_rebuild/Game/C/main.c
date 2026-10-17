@@ -23,6 +23,7 @@
 #include "pres.h"
 #include "draw.h"
 #include "denting.h"
+#include "bcollide.h"
 #include "playermodel.h"
 #include "cosmetic.h"
 #include "pedest.h"
@@ -1803,6 +1804,27 @@ void DrawGame(void)
 			car_data[MainPlayer.playerCarId].ap.damage[z] = (atoi(getenv("REDRIVER2_DENT")) >> z & 1) ? 3500 : 0;
 
 		DentCar(&car_data[MainPlayer.playerCarId]);
+	}
+
+	// REDRIVER2_IMPACT=x,y,z,value: dent the player car round a point in model space at step 40 (test of the impact dents)
+	if (getenv("REDRIVER2_IMPACT") && FrameCnt == 40 && MainPlayer.playerType == PLAYER_TYPE_CAR)
+	{
+		int a[6] = { 0, 0, 0, 0, -1, 1 };
+		int n;
+		CAR_DATA* tcp = &car_data[MainPlayer.playerCarId];
+
+		sscanf(getenv("REDRIVER2_IMPACT"), "%d,%d,%d,%d,%d,%d", &a[0], &a[1], &a[2], &a[3], &a[4], &a[5]);
+
+		for (n = 0; n < a[5]; n++)
+		{
+			if (a[4] >= 0)
+			{
+				ApplyDamage(tcp, a[4], a[3], 0);
+				MirrorCentreDamage(tcp, a[4], a[0], a[3]);
+			}
+
+			ImpactDent(tcp, a[0], a[1], a[2], a[3]);
+		}
 	}
 
 	if (gPedTest && FrameCnt == 30)

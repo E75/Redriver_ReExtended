@@ -8,9 +8,9 @@ Redriver ReExtended is a fork of [REDRIVER2](https://github.com/OpenDriver2/REDR
 
 ![Miami](docs/images/miami.jpg)
 
-## Download (v0.1 beta)
+## Download (v0.15 beta)
 
-Do not want to build it? Download **Redriver_ReExtended_v0.1-beta.zip** from the [Releases page](https://github.com/E75/Redriver_ReExtended/releases), unzip it and follow "How to set it up with your own game files" below (you only add your own Driver 2 files, and optionally Driver 1).
+Do not want to build it? Download **Redriver_ReExtended_v0.15-beta.zip** from the [Releases page](https://github.com/E75/Redriver_ReExtended/releases), unzip it and follow "How to set it up with your own game files" below (you only add your own Driver 2 files, and optionally Driver 1).
 
 > **Beta, and updates are likely but not guaranteed.** I will most probably keep improving this, but I have a busy life, so new versions can take a while or come in bursts. Bug reports are welcome as GitHub issues; please say which city and what you were doing, and attach `REDRIVER2.log` when you can.
 
@@ -22,11 +22,12 @@ Do not want to build it? Download **Redriver_ReExtended_v0.1-beta.zip** from the
 | **Draw distance** up to "10x" with distance fog and an HD sky; far objects fade in instead of popping up. | ![Aerial view](docs/images/miami_aerial.jpg) |
 | **Weather**: rain with wet-road reflections, snow, fog. All lights and car lamps work in the weather. | ![Rain](docs/images/chicago_rain.jpg) ![Snow](docs/images/chicago_snow.jpg) |
 | **Day and night cycle**: a continuous 24 hour clock, the sun moves, shadows follow, the sky blends. | ![Dusk](docs/images/chicago_dusk.jpg) |
-| **Traffic and people** density 1x to 10x, cars that fade in, parked cars, jam breaker. | ![Crowd](docs/images/newyork.jpg) |
+| **Traffic and people** density 1x to 10x, cars that fade in, parked cars, jam breaker, cars that keep their distance and back up when stuck, and a car spawner in the debug menu. | ![Crowd](docs/images/newyork.jpg) |
 | **Free camera** (on by default): right stick / mouse orbits the chase camera and returns by itself. On foot the camera is GTA style and the pad walks relative to it. | ![Free camera](docs/images/freecam_side.jpg) ![On foot](docs/images/onfoot.jpg) |
 | **Pilotable helicopter** (Chicago and the other Driver 2 cities) with a wider chase camera (180%). | ![Helicopter over Chicago](docs/images/chopper_chicago.jpg) |
 | **Night driving**: volumetric headlights, glowing lamps, car gloss in the sun, broken lamps stay dark. | ![Los Angeles at night](docs/images/la_night.jpg) |
 | **Newcastle and Training ground** (the two smallest Driver 1 levels). | ![Newcastle](docs/images/newcastle.jpg) ![Training](docs/images/training.jpg) |
+| **Impact dents**: a hit dents the car where it was hit. A hit on the left front dents the left front and leaves the right front whole, a pole in the middle dents the middle, front and rear crumple back to the wheel arches after a few hits, side hits push the doors in and press the roof down. Traffic cars dent the same way and are whole again when they spawn. | ![Impact dents](docs/images/impact_dents.webp) |
 | **Map editor** (`-editor` or F4 in a dev build): top-down camera, move or delete props, remove collision boxes, saved per city. | ![Map editor](docs/images/map_editor.jpg) |
 
 More: ground and water backdrops so the Driver 1 cities have no holes, kerb "invisible wall" removal, Driver 1 lane directions and traffic lights, D1 car models with fitted lamps and wheels (see [docs/dev-notes/d1-car-lamp-check.json](docs/dev-notes/d1-car-lamp-check.json)), an all-cities-cars option, and many fixes (endless loops, invisible cars, ped rendering).

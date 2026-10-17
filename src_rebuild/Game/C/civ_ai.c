@@ -1681,6 +1681,9 @@ int PingOutCar(CAR_DATA * cp)
 	
 	cp->inform = NULL;
 
+#ifndef PSX
+	ResetImpactDents(cp->id);
+#endif
 	ClearMem((char*)cp, sizeof(CAR_DATA));
 
 	cp->controlType = CONTROL_TYPE_NONE;

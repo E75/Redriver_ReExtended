@@ -7,6 +7,8 @@ extern void D1BuildDamageZones(int slot);
 extern void LoadDenting(int level); // 0x0003B1F0
 
 extern void DentCar(CAR_DATA *cp); // 0x0003A310
+extern void ResetImpactDents(int carId);
+extern void ImpactDent(CAR_DATA* cp, int hx, int hy, int hz, int value);	// dent round a hit point (model space)
 extern void CreateDentableCar(CAR_DATA *cp); // 0x0003A6E4
 
 extern void InitHubcap(); // 0x0003A874

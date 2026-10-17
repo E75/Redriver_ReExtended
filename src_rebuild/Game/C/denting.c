@@ -60,6 +60,165 @@ void InitialiseDenting(void)
 	InitHubcap();
 }
 
+#ifdef PSX
+#define DENT_OFFSET(cp, vi, axis)	0
+#define DENT_ZONE_BLEND		1 / 2
+#else
+// [A] impact dents: a hit pushes the vertices round the hit point inwards, on top of the zone damage (DentCar adds
+// the offsets). Hit points are in model space (x right, y down, z along the nose), every car has its own offsets.
+static SVECTOR gDentOffset[MAX_CARS][MAX_DENTING_VERTS];
+static unsigned char gDentDirty[MAX_CARS];
+
+#define DENT_OFFSET(cp, vi, axis)	(gDentOffset[(cp)->id][vi].axis)
+
+#define DENT_DEPTH_DIV		16		// damage value / this = depth of a dent for a Driver 2 sized car
+#define DENT_MAX_DEPTH		85
+#define DENT_RADIUS_MIN		90
+#define DENT_MAX_TOTAL		110		// no vertex moves farther than this in all dents together
+#define DENT_FRONT_STRETCH	1.6f	// front and rear dents reach this much farther along the car
+#define DENT_SIDE_STRETCH	2.0f	// side dents reach from wheel to wheel
+#define DENT_ROOF_SAG		45		// percent of the dent depth the roof beside a side hit sinks
+#define DENT_ZONE_BLEND		3 / 10	// the damaged model is blended in at this part of the original strength: the dents carry the shape
+#define DENT_CRINKLE		15		// percent: the dent depth varies a bit from vertex to vertex
+
+void ImpactDent(CAR_DATA* cp, int hx, int hy, int hz, int value)
+{
+	MODEL* model = gCarCleanModelPtr[cp->ap.model];
+	CAR_COSMETICS* cos = cp->ap.carCos;
+	SVECTOR* clean;
+	SVECTOR* off = gDentOffset[cp->id];
+	int scale, depth, radius, maxTotal;
+	int dirX, dirY, dirZ, len, vi;
+	float zStretch, xStretch;
+	int frontRear, roofLine = -32767;
+
+	if (model == NULL || value <= 0 || model->num_vertices >= MAX_DENTING_VERTS)
+		return;
+
+	// sizes are for a Driver 2 car (half length 375), longer cars dent over a larger area
+	scale = cos->colBox.vz * 4096 / 375;
+	depth = MIN(value / DENT_DEPTH_DIV, DENT_MAX_DEPTH) * scale >> 12;
+	radius = (DENT_RADIUS_MIN + value / 16) * scale >> 12;
+	maxTotal = DENT_MAX_TOTAL * scale >> 12;
+
+	// inwards: from the hit to the middle of the car, mostly horizontal
+	dirX = cos->cog.vx - hx;
+	dirY = (cos->cog.vy - hy) / 3;
+	dirZ = cos->cog.vz - hz;
+	len = SquareRoot0(dirX * dirX + dirY * dirY + dirZ * dirZ);
+
+	if (len < 1 || depth < 1)
+		return;
+
+	dirX = dirX * 4096 / len;
+	dirY = dirY * 4096 / len;
+	dirZ = dirZ * 4096 / len;
+
+	clean = GET_MODEL_DATA(SVECTOR, model, vertices);
+
+	// a hit on the front or the rear crumples back to the wheel arch and stays on its side of the car; a hit on the side
+	// pushes the doors straight in from wheel to wheel and presses the roof beside it down
+	frontRear = ABS(hz - cos->cog.vz) > cos->colBox.vz * 6 / 10;
+
+	if (frontRear)
+	{
+		zStretch = DENT_FRONT_STRETCH;
+		xStretch = 0.75f;
+	}
+	else
+	{
+		int minY = 32767, maxY = -32767;
+
+		zStretch = DENT_SIDE_STRETCH;
+		xStretch = 1.0f;
+		depth = depth * 13 / 10;
+		dirX = dirX < 0 ? -4096 : 4096;
+		dirY = 0;
+		dirZ = 0;
+
+		for (vi = 0; vi < model->num_vertices; vi++)
+		{
+			minY = MIN(minY, clean[vi].vy);
+			maxY = MAX(maxY, clean[vi].vy);
+		}
+
+		roofLine = minY + (maxY - minY) * 35 / 100;		// y is down: the upper third of the body
+	}
+
+	for (vi = 0; vi < model->num_vertices; vi++)
+	{
+		int px = clean[vi].vx + off[vi].vx;
+		int py = clean[vi].vy + off[vi].vy;
+		int pz = clean[vi].vz + off[vi].vz;
+		float nx = (px - hx) / (radius * xStretch), ny = (py - hy) / (radius * 1.2f), nz = (pz - hz) / (radius * zStretch);
+		float n2 = nx * nx + ny * ny + nz * nz;
+		int t, w, middle, push, ox, oy, oz, sag = 0;
+
+		if (py < roofLine)
+		{
+			float rx = (px - hx) / (radius * 1.5f), rz = (pz - hz) / (radius * zStretch * 1.2f);
+			float r2 = rx * rx + rz * rz;
+
+			if (r2 < 1.0f)
+			{
+				t = (int)((1.0f - sqrtf(r2)) * 4096);
+				sag = depth * DENT_ROOF_SAG / 100 * (t * t >> 12) >> 12;
+			}
+		}
+
+		if (n2 >= 1.0f && sag == 0)
+			continue;
+
+		if (n2 >= 1.0f)
+		{
+			// only the roof moves
+			off[vi].vy += sag;
+			continue;
+		}
+
+		t = (int)((1.0f - sqrtf(n2)) * 4096);
+		w = t * t >> 12;
+
+		// the middle of the car (cabin) resists: no dent when the vertex lies close to the centre line of the body
+		middle = SquareRoot0((px - cos->cog.vx) * (px - cos->cog.vx) + (pz - cos->cog.vz) * (pz - cos->cog.vz));
+		w = w * MIN(4096, middle * 4096 / (cos->colBox.vz / 2 + 1)) >> 12;
+
+		w = w * (4096 + RSIN(vi * 977 + hx * 3 + hz * 7) * DENT_CRINKLE / 100) >> 12;
+		push = depth * w >> 12;
+
+		ox = off[vi].vx + (dirX * push >> 12);
+		oy = off[vi].vy + (dirY * push >> 12) + sag;
+		oz = off[vi].vz + (dirZ * push >> 12);
+
+		len = SquareRoot0(ox * ox + oy * oy + oz * oz);
+
+		if (len > maxTotal)
+		{
+			ox = ox * maxTotal / len;
+			oy = oy * maxTotal / len;
+			oz = oz * maxTotal / len;
+		}
+
+		off[vi].vx = ox;
+		off[vi].vy = oy;
+		off[vi].vz = oz;
+	}
+
+	gDentDirty[cp->id] = 1;
+	cp->ap.needsDenting = 1;
+}
+
+// a car that leaves (pinged out) or is created loses its dents, so the next car in the slot is whole
+void ResetImpactDents(int carId)
+{
+	if (gDentDirty[carId])
+	{
+		memset(gDentOffset[carId], 0, sizeof(gDentOffset[carId]));
+		gDentDirty[carId] = 0;
+	}
+}
+#endif
+
 // [D] [T]
 void DentCar(CAR_DATA *cp)
 {
@@ -119,9 +278,9 @@ void DentCar(CAR_DATA *cp)
 
 		for (VertNo = 0; VertNo < pCleanModel->num_vertices; VertNo++, DamVertPtr++, CleanVertPtr++)
 		{
-			gTempCarVertDump[cp->id][VertNo].vx = CleanVertPtr->vx + FIXEDH((DamVertPtr->vx - CleanVertPtr->vx) * tempDamage[VertNo] / 2);
-			gTempCarVertDump[cp->id][VertNo].vy = CleanVertPtr->vy + FIXEDH((DamVertPtr->vy - CleanVertPtr->vy) * tempDamage[VertNo] / 2);
-			gTempCarVertDump[cp->id][VertNo].vz = CleanVertPtr->vz + FIXEDH((DamVertPtr->vz - CleanVertPtr->vz) * tempDamage[VertNo] / 2);
+			gTempCarVertDump[cp->id][VertNo].vx = CleanVertPtr->vx + FIXEDH((DamVertPtr->vx - CleanVertPtr->vx) * tempDamage[VertNo] * DENT_ZONE_BLEND) + DENT_OFFSET(cp, VertNo, vx);
+			gTempCarVertDump[cp->id][VertNo].vy = CleanVertPtr->vy + FIXEDH((DamVertPtr->vy - CleanVertPtr->vy) * tempDamage[VertNo] * DENT_ZONE_BLEND) + DENT_OFFSET(cp, VertNo, vy);
+			gTempCarVertDump[cp->id][VertNo].vz = CleanVertPtr->vz + FIXEDH((DamVertPtr->vz - CleanVertPtr->vz) * tempDamage[VertNo] * DENT_ZONE_BLEND) + DENT_OFFSET(cp, VertNo, vz);
 		}
 	}
 
@@ -218,6 +377,9 @@ void CreateDentableCar(CAR_DATA *cp)
 
 	if (gDontResetCarDamage == 0) 
 	{
+#ifndef PSX
+		ResetImpactDents(cp->id);
+#endif
 		for (count = 0; count < NUM_DAMAGE_ZONES; count++)
 		{
 			cp->ap.damage[count] = 0;
