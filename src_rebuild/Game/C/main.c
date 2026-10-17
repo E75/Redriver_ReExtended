@@ -1969,8 +1969,8 @@ void DrawGame(void)
 		printInfo("shot: car pop-ins in view %d\n", gCarPopIns);
 
 		extern int gPingFail[16];
-		printInfo("shot: ping in results: spawned %d, no road %d, bad road %d, no lane %d, not drivable %d, straight short %d, curve short %d, parked max %d, bad dir %d, crowded %d, too close %d, no seg %d, in view %d\n",
-			gPingFail[0], gPingFail[1], gPingFail[2], gPingFail[3], gPingFail[4], gPingFail[5], gPingFail[6], gPingFail[7], gPingFail[8], gPingFail[9], gPingFail[10], gPingFail[11], gPingFail[12]);
+		printInfo("shot: ping in results: spawned %d, no road %d, bad road %d, no lane %d, not drivable %d, straight short %d, curve short %d, parked max %d, bad dir %d, crowded %d, too close %d, no seg %d, in view %d, not approaching %d\n",
+			gPingFail[0], gPingFail[1], gPingFail[2], gPingFail[3], gPingFail[4], gPingFail[5], gPingFail[6], gPingFail[7], gPingFail[8], gPingFail[9], gPingFail[10], gPingFail[11], gPingFail[12], gPingFail[13]);
 
 		extern int gPedPingFail[4];
 		printInfo("shot: ped ping in results: spawned %d, no pavement %d, too close %d\n", gPedPingFail[0], gPedPingFail[1], gPedPingFail[2]);
