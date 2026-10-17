@@ -71,6 +71,16 @@ The game needs the files of your own Driver 2 discs **extracted on disk**, not o
 4. Optional, for videos and music: put the disc images as `install\Driver2CD1.bin` and `install\Driver2CD2.bin` (`[cdfs] image=` in `config.ini`) and run `_convert_cd_fmv_xa.bat` once (needs Java; it uses the included jpsxdec). Without it the game runs without videos (`-nofmv`).
 5. Start `REDRIVER2_dev.exe`. The detailed original instructions are in the [upstream wiki](https://github.com/OpenDriver2/REDRIVER2/wiki/Installation-instructions).
 
+**What it should look like** (the folders of the discs show up as plain folders; the exact list can differ a little per disc):
+
+The game folder, next to `REDRIVER2_dev.exe`:
+
+![Game folder](docs/images/setup_1_game_folder.png)
+
+`DRIVER2` after copying the files of your Driver 2 disc into it (`LEVELS` must hold `CHICAGO.LEV`, `HAVANA.LEV`, `RIO.LEV` and `VEGAS.LEV`):
+
+![DRIVER2 folder](docs/images/setup_2_driver2.png)
+
 ### 3. Driver 1 cities (optional)
 
 1. Copy the `LEVELS` and `DATA` folders of your Driver 1 disc into a folder `DRIVER1` next to the `DRIVER2` folder:
@@ -89,6 +99,12 @@ The game needs the files of your own Driver 2 discs **extracted on disk**, not o
    - in the game: Options > Gameplay > Secret > Extended Settings > **Driver 1 DLC** > **Check Driver 1 Data**. A message asks you to wait (about a minute). Then switch the option **On**.
 3. The result is stored in `config.ini` (`[d1dlc]`), so the game never scans again. The converted files are written to `DRIVER1\CONVERTED\` on your PC.
 4. Take a Ride > **Driver 1 Cities**, or Undercover > **D1 Missions**.
+
+What the Driver 1 folder should look like before you run `prepare_driver1.bat` (`DATA`, `LEVELS` and, for the story missions, `MISSIONS\MISSION.BLK`):
+
+![DRIVER1 folder](docs/images/setup_3_driver1.png)
+
+![DRIVER1 LEVELS folder](docs/images/setup_4_driver1_levels.png)
 
 See [docs/DRIVER1_SETUP.md](docs/DRIVER1_SETUP.md) for details and troubleshooting.
 
