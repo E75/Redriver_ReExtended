@@ -22,6 +22,7 @@
 #include "glaunch.h"
 #include "shadow.h"
 #include "players.h"
+#include "chopper.h"
 
 struct BOUND_BOX
 {
@@ -1145,7 +1146,7 @@ void ProcessCarPad(CAR_DATA* cp, u_int pad, char PadSteer, char use_analogue)
 		// handle car leaving
 		if ((pad & CAR_PAD_LEAVECAR) == CAR_PAD_LEAVECAR && player_id > -1)
 		{
-			if (!TannerStuckInCar(1, player_id))
+			if (!TannerStuckInCar(1, player_id) && ChopperCanLeave())
 			{
 				if (player[player_id].dying == 0)
 				{

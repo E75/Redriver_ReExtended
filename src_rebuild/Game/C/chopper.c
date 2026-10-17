@@ -60,6 +60,7 @@ static int parkedSpot = -1;		// spot the idle chopper stands at, -1 = none in ra
 static CAR_DATA* pilotedCar = NULL;	// the car the chopper replaced while flown
 static CAR_DATA* landedCar = NULL;	// the pilot got out: the chopper stays on this car until the player walks away
 
+#define CHOPPER_LEAVE_HEIGHT	250		// the pilot may get out below this height above the ground
 #define CHOPPER_LEAVE_DISTANCE	2500	// a few steps from the chopper it turns back into the car
 
 static CAR_DATA* PilotCar(void)
@@ -499,7 +500,7 @@ void ChopperStep(void)
 			player[0].pPed->position.vx += 3000;
 
 		if (FrameCnt % 30 == 0 && FrameCnt >= 30)
-			printInfo("choppertest: step %d flying %d landed %d shown %d car hidden %d\n", FrameCnt, gChopper, landedCar != NULL, ChopperEventShown(), landedCar ? ChopperHidesCar(landedCar) : 0);
+			printInfo("choppertest: step %d flying %d landed %d shown %d car hidden %d height %d\n", FrameCnt, gChopper, landedCar != NULL, ChopperEventShown(), landedCar ? ChopperHidesCar(landedCar) : 0, ChopperHeight());
 	}
 
 	if (landedCar)
@@ -560,6 +561,29 @@ void ChopperStep(void)
 		SetChannelPitch(chopperChan, 4096 + (cp->st.n.linearVelocity[1] >> 8));
 }
 
+int ChopperHeight(void)
+{
+	CAR_DATA* cp;
+	VECTOR ground;
+
+	cp = PilotCar();
+
+	if (!gChopper || cp == NULL)
+		return 0;
+
+	// same coordinates as the shadow in ChopperDrawShadow: height of the chopper above the ground below it
+	ground.vx = cp->hd.where.t[0];
+	ground.vy = 0;
+	ground.vz = cp->hd.where.t[2];
+
+	return (4 - MapHeight(&ground)) + cp->hd.where.t[1];
+}
+
+int ChopperCanLeave(void)
+{
+	return ChopperHeight() < CHOPPER_LEAVE_HEIGHT;
+}
+
 int ChopperHidesCar(CAR_DATA* cp)
 {
 	return (gChopper && cp == PilotCar()) || (landedCar != NULL && cp == landedCar);
@@ -572,5 +596,7 @@ void ChopperToggle(int direction) {}
 void ChopperStep(void) {}
 void ChopperDrawShadow(void) {}
 int ChopperHidesCar(CAR_DATA* cp) { return 0; }
+int ChopperHeight(void) { return 0; }
+int ChopperCanLeave(void) { return 1; }
 
 #endif
