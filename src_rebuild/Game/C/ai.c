@@ -16,6 +16,8 @@ void StoreGameFlags(void)
 	ReplayParameterPtr->timeofday = gTimeOfDay;
 }
 
+#define TANNER_CAR_MAX_SPEED 20		// wheel speed limit for getting in or out (was 2: only a standing car)
+
 // [D] [T]
 int TannerCanEnterCar(CAR_DATA *cp, int distToCarSq)
 {
@@ -29,7 +31,7 @@ int TannerCanEnterCar(CAR_DATA *cp, int distToCarSq)
 		(cp->controlFlags & CONTROL_FLAG_COP_SLEEPING) == 0 && 
 		cp->hd.where.m[1][1] > 99)			// not flipped over
 	{
-		if (ABS(FIXEDH(cp->hd.wheel_speed)) < 3)
+		if (ABS(FIXEDH(cp->hd.wheel_speed)) <= TANNER_CAR_MAX_SPEED)
 		{
 			carRange = car_cosmetics[cp->ap.model].colBox.vx * 2;
 
@@ -75,7 +77,7 @@ int TannerStuckInCar(int doSpeedCheck, int player_id)
 				if (speed < 0)
 					speed = -speed;
 
-				if (speed > 2)
+				if (speed > TANNER_CAR_MAX_SPEED)
 					return 1;
 			}
 
