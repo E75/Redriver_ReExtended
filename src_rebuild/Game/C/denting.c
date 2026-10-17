@@ -1,4 +1,5 @@
 #include "driver2.h"
+#include "cosmetic.h"
 #include "denting.h"
 #include "system.h"
 #include "mission.h"
@@ -85,6 +86,7 @@ int WheelIsLost(CAR_DATA* cp, int wheel)
 static void MaybeLoseWheel(CAR_DATA* cp, int hx, int hz, int value, int scale)
 {
 	CAR_COSMETICS* cos = cp->ap.carCos;
+	const SVECTOR* wheelDisp = gD1WheelVisualOn[cp->ap.model] ? gD1WheelVisual[cp->ap.model] : cos->wheelDisp;	// Driver 1 cars: where the wheels are drawn
 	int i, best = -1;
 	long long bestDist = (long long)(DENT_WHEEL_REACH * scale >> 12) * (DENT_WHEEL_REACH * scale >> 12);
 
@@ -94,7 +96,7 @@ static void MaybeLoseWheel(CAR_DATA* cp, int hx, int hz, int value, int scale)
 	for (i = 0; i < 4; i++)
 	{
 		// wheel position in model space (DrawCarWheels: x = -wheelDisp.vx, z = -wheelDisp.vz)
-		long long dx = hx + cos->wheelDisp[i].vx, dz = hz + cos->wheelDisp[i].vz, d2 = dx * dx + dz * dz;
+		long long dx = hx + wheelDisp[i].vx, dz = hz + wheelDisp[i].vz, d2 = dx * dx + dz * dz;
 
 		if (!WheelIsLost(cp, i) && d2 < bestDist)
 		{
