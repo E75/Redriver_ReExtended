@@ -1,5 +1,6 @@
 #include "driver2.h"
 #include "allcars.h"
+#include "carspawner.h"
 #include "models.h"
 #include "mission.h"
 #include "spool.h"
@@ -43,6 +44,10 @@ static int foreignSpecial = 0;
 static int foreignSrc[2];
 static char* foreignBlock = NULL;
 
+// texture counts of the two pages of a special car, kept per (city, special): reading them needs the data areas of the level file
+static int texAmtCache[4][5][2];
+static char texAmtKnown[4][5];
+
 static int ReadForeignBlock(int city, int special)
 {
 	char path[64];
@@ -55,6 +60,9 @@ static int ReadForeignBlock(int city, int special)
 	int pageAmount, i, j;
 	int ok = 0;
 
+	if (city < 0 || city > 3 || special < 1 || special > 5)
+		return 0;
+
 	sprintf(path, "%s%s", gDataFolder, LevelFiles[city]);
 	FS_FixPathSlashes(path);
 
@@ -63,46 +71,54 @@ static int ReadForeignBlock(int city, int special)
 	if (!f)
 		return 0;
 
-	fseek(f, 8, SEEK_SET);
-
-	if (fread(lumps, sizeof(lumps), 1, f) != 1)
-		goto done;
-
-	areaSize[0] = lumps[CITYLUMP_DATA1].y;
-	areaSize[1] = lumps[CITYLUMP_DATA2].y;
-	area[0] = ReadFilePart(f, lumps[CITYLUMP_DATA1].x, areaSize[0]);
-	area[1] = ReadFilePart(f, lumps[CITYLUMP_DATA2].x, areaSize[1]);
-
-	if (!area[0] || !area[1])
-		goto done;
-
-	texInfo = FindLevelLump(area[0], areaSize[0], LUMP_TEXTUREINFO);
-
-	if (!texInfo)
-		texInfo = FindLevelLump(area[1], areaSize[1], LUMP_TEXTUREINFO);
-
-	if (!texInfo)
-		goto done;
-
 	foreignSrc[0] = specTpages[city][(special - 1) * 2];
 	foreignSrc[1] = specTpages[city][(special - 1) * 2 + 1];
 
-	// the texture lump (see ProcessTextureInfo): the palette count of a page is its texture count
-	pageAmount = *(int*)texInfo;
-	ptr = texInfo + 8 + (pageAmount + 1) * sizeof(TP);
-
-	for (i = 0; i < pageAmount; i++)
+	if (!texAmtKnown[city][special - 1])
 	{
-		int texAmount = *(int*)ptr;
+		fseek(f, 8, SEEK_SET);
 
-		for (j = 0; j < 2; j++)
+		if (fread(lumps, sizeof(lumps), 1, f) != 1)
+			goto done;
+
+		areaSize[0] = lumps[CITYLUMP_DATA1].y;
+		areaSize[1] = lumps[CITYLUMP_DATA2].y;
+		area[0] = ReadFilePart(f, lumps[CITYLUMP_DATA1].x, areaSize[0]);
+		area[1] = ReadFilePart(f, lumps[CITYLUMP_DATA2].x, areaSize[1]);
+
+		if (!area[0] || !area[1])
+			goto done;
+
+		texInfo = FindLevelLump(area[0], areaSize[0], LUMP_TEXTUREINFO);
+
+		if (!texInfo)
+			texInfo = FindLevelLump(area[1], areaSize[1], LUMP_TEXTUREINFO);
+
+		if (!texInfo)
+			goto done;
+
+		// the texture lump (see ProcessTextureInfo): the palette count of a page is its texture count
+		pageAmount = *(int*)texInfo;
+		ptr = texInfo + 8 + (pageAmount + 1) * sizeof(TP);
+
+		for (i = 0; i < pageAmount; i++)
 		{
-			if (i == foreignSrc[j])
-				tpage_texamts[FOREIGN_PAGE1 + j] = texAmount;
+			int texAmount = *(int*)ptr;
+
+			for (j = 0; j < 2; j++)
+			{
+				if (i == foreignSrc[j])
+					texAmtCache[city][special - 1][j] = texAmount;
+			}
+
+			ptr += 4 + texAmount * sizeof(TEXINF);
 		}
 
-		ptr += 4 + texAmount * sizeof(TEXINF);
+		texAmtKnown[city][special - 1] = 1;
 	}
+
+	tpage_texamts[FOREIGN_PAGE1] = texAmtCache[city][special - 1][0];
+	tpage_texamts[FOREIGN_PAGE1 + 1] = texAmtCache[city][special - 1][1];
 
 	free(foreignBlock);
 	foreignBlock = ReadFilePart(f, (SPECIAL_BLOCK_START + (special - 1) * SPECIAL_BLOCK_SECTORS) * CDSECTOR_SIZE, FOREIGN_BLOCK_SECTORS * CDSECTOR_SIZE);
@@ -126,7 +142,7 @@ void AllCarsLevelStart(void)
 	gForeignSpool = 0;
 	gForeignLoaded = 0;
 
-	if (!gAllCityCars || GameLevel > 3 || !allowSpecSpooling)
+	if (!gAllCityCars || GameLevel > 3 || !allowSpecSpooling || gCarSpawner)
 		return;
 
 	if (gForeignForceCity >= 0)
@@ -174,6 +190,27 @@ void AllCarsLevelStart(void)
 	printInfo("All cities cars: special %d of %s\n", pick, LevelNames[city]);
 }
 
+// Car Spawner: the special car 'special' of Driver 2 city 'city' becomes the car of the special slot at the next special spool
+int ForeignCarSelect(int city, int special)
+{
+	if (!ReadForeignBlock(city, special))
+		return 0;
+
+	foreignCity = city;
+	foreignSpecial = special;
+	gForeignSpool = 1;
+	gForeignLoaded = 1;
+	return 1;
+}
+
+// Car Spawner: the special slot holds a car of this city again
+void ForeignCarClear(void)
+{
+	foreignCity = -1;
+	gForeignSpool = 0;
+	gForeignLoaded = 0;
+}
+
 int ForeignCarMode(void)
 {
 	return foreignCity >= 0;
@@ -200,12 +237,13 @@ int ForeignPageId(int i)
 }
 
 // the polygons of a model of the foreign city name its two car pages by that city's numbers
-void ForeignRemapModel(MODEL* polySrc)
+// the polygons of a car model name its two car pages by src1 / src2: they get the page numbers dest1 / dest2
+void RemapModelPages(MODEL* polySrc, int src1, int src2, int dest1, int dest2)
 {
 	PL_POLYFT4* polys;
 	int i, ptype;
 
-	if (!gForeignSpool || polySrc == NULL)
+	if (polySrc == NULL)
 		return;
 
 	polys = GET_RELOC_MODEL_DATA(PL_POLYFT4, polySrc, poly_block);
@@ -216,14 +254,21 @@ void ForeignRemapModel(MODEL* polySrc)
 
 		if (ptype == 10 || ptype == 11 || ptype == 20 || ptype == 21 || ptype == 22 || ptype == 23)
 		{
-			if (polys->texture_set == foreignSrc[0])
-				polys->texture_set = FOREIGN_PAGE1;
-			else if (polys->texture_set == foreignSrc[1])
-				polys->texture_set = FOREIGN_PAGE2;
+			if (polys->texture_set == src1)
+				polys->texture_set = dest1;
+			else if (polys->texture_set == src2)
+				polys->texture_set = dest2;
 		}
 
 		polys = (PL_POLYFT4*)((char*)polys + PolySizes[ptype]);
 	}
+}
+
+// the polygons of a model of the foreign city name its two car pages by that city's numbers
+void ForeignRemapModel(MODEL* polySrc)
+{
+	if (gForeignSpool)
+		RemapModelPages(polySrc, foreignSrc[0], foreignSrc[1], FOREIGN_PAGE1, FOREIGN_PAGE2);
 }
 
 #endif // !PSX

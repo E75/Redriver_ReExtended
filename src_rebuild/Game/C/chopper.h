@@ -12,5 +12,6 @@ extern int ChopperHidesCar(CAR_DATA* cp);	// the player car is replaced by the c
 extern void ChopperPagesLost(void);			// Jericho took the special texture slot
 extern int ChopperHeight(void);				// height of the flying chopper above the ground, 0 when not flying
 extern int ChopperCanLeave(void);			// 0 while the chopper is in the air: the pilot may only get out on the ground
+extern void ChopperSlotTaken(void);			// the special slot holds another car now: the chopper pages are gone
 
 #endif

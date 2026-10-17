@@ -2338,6 +2338,11 @@ void AbortSpecialSpool(void)
 	specSpoolComplete = 0;
 	startSpecSpool = -1;
 }
+// [A] Car Spawner: a special car spool by hand (QuickSpoolSpecial) works again after AbortSpecialSpool
+void ResumeSpecialSpool(void)
+{
+	specSpoolAborted = 0;
+}
 #endif
 
 // [A] the special car of this region is not in the slot yet; with a foreign car chosen (allcars.c) it is spooled once

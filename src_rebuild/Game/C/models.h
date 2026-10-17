@@ -23,6 +23,9 @@ extern unsigned short *Low2LowerDetailTable;
 extern int num_models_in_pack;
 
 extern int CleanSpooledModelSlots();
+extern int LoadCarModelIntoSpecialSlot(int model_number, char* lump, int src1, int src2);
+extern int gSpecMemReq;
+extern void KeepCarModelsLump(char* lump, int size);
 extern MODEL* GapFillModel(MODEL* model, int size, int modelNumber); // gapfill.c
 extern void ProcessModel(int modelIdx);
 
