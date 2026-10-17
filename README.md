@@ -17,7 +17,8 @@ Redriver ReExtended is a fork of [REDRIVER2](https://github.com/OpenDriver2/REDR
 | **Weather**: rain with wet-road reflections, snow, fog. All lights and car lamps work in the weather. | ![Rain](docs/images/chicago_rain.jpg) ![Snow](docs/images/chicago_snow.jpg) |
 | **Day and night cycle**: a continuous 24 hour clock, the sun moves, shadows follow, the sky blends. | ![Dusk](docs/images/chicago_dusk.jpg) |
 | **Traffic and people** density 1x to 10x, cars that fade in, parked cars, jam breaker. | ![Crowd](docs/images/newyork.jpg) |
-| **Free camera**: right stick / mouse orbits the chase camera. On foot the camera is GTA style and the pad walks relative to it. | ![On foot](docs/images/onfoot.jpg) |
+| **Free camera** (on by default): right stick / mouse orbits the chase camera and returns by itself. On foot the camera is GTA style and the pad walks relative to it. | ![Free camera](docs/images/freecam_side.jpg) ![On foot](docs/images/onfoot.jpg) |
+| **Pilotable helicopter** (Chicago and the other Driver 2 cities) with a wider chase camera (180%). | ![Helicopter over Chicago](docs/images/chopper_chicago.jpg) |
 | **Night driving**: volumetric headlights, glowing lamps, car gloss in the sun, broken lamps stay dark. | ![Los Angeles at night](docs/images/la_night.jpg) |
 | **Newcastle and Training ground** (the two smallest Driver 1 levels). | ![Newcastle](docs/images/newcastle.jpg) ![Training](docs/images/training.jpg) |
 | **Map editor** (`-editor` or F4 in a dev build): top-down camera, move or delete props, remove collision boxes, saved per city. | ![Map editor](docs/images/map_editor.jpg) |
@@ -25,6 +26,26 @@ Redriver ReExtended is a fork of [REDRIVER2](https://github.com/OpenDriver2/REDR
 More: ground and water backdrops so the Driver 1 cities have no holes, kerb "invisible wall" removal, Driver 1 lane directions and traffic lights, D1 car models with fitted lamps and wheels (see [docs/dev-notes/d1-car-lamp-check.json](docs/dev-notes/d1-car-lamp-check.json)), an all-cities-cars option, and many fixes (endless loops, invisible cars, ped rendering).
 
 ![All Driver 1 cars were checked for lamps and wheels](docs/images/d1_cars.jpg)
+
+## Volumetric lighting
+
+Lights in the original game are flat sprites. Redriver ReExtended adds a small light volume pass (PsyCross renderer, `PsyX_postfx.cpp`) that is on by default and can be switched off under Options - Gameplay - Secret - Volumetric Options:
+
+- **Lamp and headlight cones**: up to 16 lights per frame (head lamps, street lamps, traffic lights) are handed to the renderer, which adds an analytic in-scattering term along each view ray. In the dark, rain or fog a headlight shows a soft cone and every lamp a halo, instead of only a sprite. A broken lamp gives no cone, no halo and no light pool on the road.
+- **Atmospheric fog**: fog has height and takes the colour of the sky and the sun, so far buildings fade into the haze instead of popping up.
+- **Sun shafts** (god rays): a radial blur from the sun over the sky pixels only, so rays run along building edges by day. Costs about 0.6 ms of GPU time.
+- **Car gloss**: in sunlight the car body gets a second additive pass with a tight sun highlight and a faint sky reflection; it fades out at night, in rain and in fog.
+- **Dynamic road pools**: the headlights of the player and of traffic light up the road in front of them; lights never shine through the ground in the rain.
+
+The design notes are in [docs/dev-notes/volumetric-lighting.md](docs/dev-notes/volumetric-lighting.md), [part 2 (lamps)](docs/dev-notes/volumetric-lighting-part2-lamps.md) and [part 3 (sun shafts)](docs/dev-notes/volumetric-lighting-part3-sunshafts.md).
+
+![Helicopter over Chicago at night, with lit windows and lamp halos](docs/images/chopper_night.jpg)
+
+## Cinematic views
+
+Use the free camera (right stick or mouse) or `-camangle <n>` for side and rear quarter views, and `-choppertest` to fly the helicopter.
+
+![Taxi in New York at night](docs/images/taxi_newyork_night.jpg)
 
 ## How to set it up with your own game files
 

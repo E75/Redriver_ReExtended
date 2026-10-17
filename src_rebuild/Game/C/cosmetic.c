@@ -214,7 +214,7 @@ static const D1CarFix sD1CarFixes[] = {
 	{ 7,  9, 89, 14, 0, 0, 89, 0, 12, 0 },
 	{ 7, 10, 127, 14, 0, 0, -11, 0, 12, 0 },
 	{ 7, 11, 113, 14, 0, 0, -82, 0, -33, 0 },
-	{ 7, 12, 120, 14, 0, 44, -58, -45, -53, 0 },
+	{ 7, 12, 120, 14, 0, 44, -58, -45, -53, 1 },
 };
 
 static const D1CarFix* FindD1CarFix(int model, int vertices)
@@ -539,9 +539,9 @@ void D1ScaleCarCosmetics(void)
 			cos->headLight.vx += fix->headDx * shrinkNum / shrinkDen;
 			cos->headLight.vy += fix->headDy * shrinkNum / shrinkDen;
 
-			if (fix->doubleHeadLamps == 2)
-				cos->extraInfo &= ~(0x8000 | 0xC00);	// the borrowed car has twin head lamps, this body has one lamp per side
-			else if (fix->doubleHeadLamps)
+			if (fix->doubleHeadLamps != 1)
+				cos->extraInfo &= ~(0x8000 | 0xC00);	// the borrowed car has twin head lamps, the D1 bodies have one lamp per side unless the table says so
+			else
 				cos->extraInfo |= 0x8000 | 0xC00;	// both lamps of a pair light up, offset 22 each side of the pair centre
 		}
 

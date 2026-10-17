@@ -470,7 +470,7 @@ static int CameraZoomPercent(PLAYER* lp)
 		zoom = zoom * D1_CAMERA_ZOOM_PERCENT / 100;
 
 	if (gChopper && lp == &player[0])
-		zoom = MAX(zoom, 140);
+		zoom = MAX(zoom, 180);
 
 	return zoom;
 }
