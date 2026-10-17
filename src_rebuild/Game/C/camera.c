@@ -800,6 +800,11 @@ void DumpCameraState(void)
 		lp->camLook, lp->camIdle, lp->cameraDist, lp->cameraView, lp->cameraCarId, lp->camFoot);
 	fprintf(f, "orbit on %d mouse %d  draw mode %d  tiles %d buildings %d\n", gCameraOrbit, gCameraMouse, gDrawDistanceMode, gDrawStats[0], gDrawStats[1]);
 	fprintf(f, "cell %d %d  inarea %d\n", current_cell_x, current_cell_z, CellInLoadedArea(current_cell_x, current_cell_z));
+	{
+		extern int g_pgxpPeak, g_vertexPeak;
+
+		fprintf(f, "most PGXP vertices in a frame %d (cache 1048576), most GPU vertices %d (buffer 262144)\n", g_pgxpPeak, g_vertexPeak);
+	}
 	fclose(f);
 }
 #endif

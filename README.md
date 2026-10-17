@@ -8,6 +8,12 @@ Redriver ReExtended is a fork of [REDRIVER2](https://github.com/OpenDriver2/REDR
 
 ![Miami](docs/images/miami.jpg)
 
+## Download (v0.1 beta)
+
+Do not want to build it? Download **Redriver_ReExtended_v0.1-beta.zip** from the [Releases page](https://github.com/E75/Redriver_ReExtended/releases), unzip it and follow "How to set it up with your own game files" below (you only add your own Driver 2 files, and optionally Driver 1).
+
+> **Beta, and updates are likely but not guaranteed.** I will most probably keep improving this, but I have a busy life, so new versions can take a while or come in bursts. Bug reports are welcome as GitHub issues; please say which city and what you were doing, and attach `REDRIVER2.log` when you can.
+
 ## What is new
 
 | Feature | Screenshot |
@@ -86,6 +92,35 @@ See [docs/DRIVER1_SETUP.md](docs/DRIVER1_SETUP.md) for details and troubleshooti
 Options > Gameplay > Secret > **Extended Settings** lists: Draw Distance, Traffic And People, Free Camera, Day Night Cycle, All Cities Cars, Sky, Driver 1 DLC. Weather and time of day can be changed in the debug pause menu, and `config.ini` has the same settings (`[game]`, `[render]`, `[d1dlc]`).
 
 Useful options on the command line: `-city <n> -mission 50` (start Take a Ride directly), `-cycle <minutes> -hour <h>`, `-weather 1|3`, `-fog`, `-drawdist 0|1|2`, `-crowd 1..5`, `-onfoot`, `-editor`, `-shot <frame>` (writes `SCREENSHOT.BMP`).
+
+### 5. Controls and the debug menu
+
+The default `config.ini` uses modern (GTA style) Xbox controls and the analog sticks are on from the start:
+
+| Action | Xbox controller |
+|---|---|
+| Gas / brake and reverse | RT / LT |
+| Steer / walk | left stick |
+| Camera (free camera) | right stick (or the mouse) |
+| Get in / out of a car | Y |
+| Handbrake / sprint, wheelspin | B / A |
+| Look left / right | LB / RB |
+| Look back | click left stick |
+| Horn | click right stick |
+
+The original PlayStation layout is kept as a comment in `[controls_game]` of `config.ini`. Keyboard controls are unchanged.
+
+Pause (Esc / Start) > **Debug Options** has extra options, most of them new:
+
+![Fun Cheats in the debug menu](docs/images/debug_menu.jpg)
+
+- **Display position**: shows X, Y, Z of the player (useful for bug reports).
+- **Back on Wheels**, **Invincibility**, **Immunity**, **Puppy Dog Cops**, **Player Ghost**, **Toggle Overlay**, **Next Mission**.
+- **Time of Day**: Day, Night, Dusk, Dawn and Clear, Rain, Snow, Fog.
+- **Fun Cheats**: Secret Car Fun, Jericho Mode, **Flying Car** (F8), **Infinite Mass** (F6, the car is not pushed by other cars), **Speed Boost Horn** (hold the horn to push the car forward, fun together with Infinite Mass) and **Chopper** (fly the helicopter).
+- **Map Editor** (F4): see above.
+
+In debug builds (this download) the game also writes `CAMSTATE.txt` next to the exe while paused: the exact camera angles and render counters. Attach it to a bug report about a glitchy camera.
 
 ## Building (Windows)
 

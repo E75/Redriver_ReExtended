@@ -492,7 +492,10 @@ void DrawTILES(PACKED_CELL_OBJECT** tiles, int tile_amount)
 	// the map is also drawn inside the tilted camera of a lifting bridge or ferry (events.camera): the backdrops would tilt with it
 	if (!events.camera)
 	{
-		DrawWaterBackdrop();
+		// Driver 2 cities have no holes to fill and the flat blue water looks wrong there: only Driver 1 gets the water backdrop
+		if (IS_DRIVER1_CITY(GameLevel))
+			DrawWaterBackdrop();
+
 		DrawGroundBackdrop();
 	}
 #endif
