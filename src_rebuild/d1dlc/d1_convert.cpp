@@ -583,44 +583,6 @@ bool ConvertTextures(ConvertContext& c)
 	return true;
 }
 
-// D1 collision boxes of low objects (kerbs, barriers, stands) are 2D walls of any height: ysize reaches 3000 and more above a
-// model of 140 units. The D2 engine checks the height, so a flying car or helicopter hit an invisible wall. Boxes are cut
-// to the model top plus a margin, never below kMinBoxTop so ground cars (jumps) are still stopped.
-void ClampBoxHeights(std::vector<char>& model)
-{
-	const int kTopMargin = 150;
-	const int kMinBoxTop = 400;
-
-	if (model.size() < sizeof(MODEL))
-		return;
-
-	const MODEL& h = *(const MODEL*)model.data();
-	if (h.collision_block <= 0 || h.collision_block + 4 > (int)model.size() || h.vertices <= 0 || h.num_vertices == 0 || h.vertices + h.num_vertices * 8 > (int)model.size())
-		return;
-
-	int count = *(const int*)&model[h.collision_block];
-	const int16_t* v = (const int16_t*)&model[h.vertices];
-	int modelTop = 0;
-	for (int i = 0; i < h.num_vertices; i++)
-		modelTop = v[i * 4 + 1] < modelTop ? v[i * 4 + 1] : modelTop;
-
-	int limit = modelTop - kTopMargin;
-	if (limit > -kMinBoxTop)
-		limit = -kMinBoxTop;
-
-	COLLISION_PACKET* p = (COLLISION_PACKET*)&model[h.collision_block + 4];
-	for (int i = 0; i < count && h.collision_block + 4 + (i + 1) * (int)sizeof(COLLISION_PACKET) <= (int)model.size(); i++)
-	{
-		int top = p[i].ypos - p[i].ysize / 2;
-		int bottom = p[i].ypos + p[i].ysize / 2;
-		if (top >= limit || bottom <= limit)
-			continue;
-
-		p[i].ysize = (int16_t)(bottom - limit);
-		p[i].ypos = (int16_t)((bottom + limit) / 2);
-	}
-}
-
 bool ConvertModels(ConvertContext& c)
 {
 	ModelSet city, donor;

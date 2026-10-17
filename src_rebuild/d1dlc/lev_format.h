@@ -301,6 +301,44 @@ inline ModelStats AnalyseModel(const char* model, int size, const char* vmodel, 
 // Driver 1 buildings have no roof (nobody looks down in the original game). Adds one quad over the box of a roofless
 // building model at its top, textured like the topmost wall quad and facing up. The new vertex and polygon lists are
 // copies appended to the model, so no offset inside the block moves. Returns 1 when a roof was added.
+// D1 collision boxes of low objects (kerbs, barriers, stands) are 2D walls of any height: ysize reaches 3000 and more above a
+// model of 140 units. The D2 engine checks the height, so a flying car or helicopter hit an invisible wall. Boxes are cut
+// to the model top plus a margin, never below kMinBoxTop so ground cars (jumps) are still stopped.
+inline void ClampBoxHeights(std::vector<char>& model)
+{
+	const int kTopMargin = 150;
+	const int kMinBoxTop = 400;
+
+	if (model.size() < sizeof(MODEL))
+		return;
+
+	const MODEL& h = *(const MODEL*)model.data();
+	if (h.collision_block <= 0 || h.collision_block + 4 > (int)model.size() || h.vertices <= 0 || h.num_vertices == 0 || h.vertices + h.num_vertices * 8 > (int)model.size())
+		return;
+
+	int count = *(const int*)&model[h.collision_block];
+	const int16_t* v = (const int16_t*)&model[h.vertices];
+	int modelTop = 0;
+	for (int i = 0; i < h.num_vertices; i++)
+		modelTop = v[i * 4 + 1] < modelTop ? v[i * 4 + 1] : modelTop;
+
+	int limit = modelTop - kTopMargin;
+	if (limit > -kMinBoxTop)
+		limit = -kMinBoxTop;
+
+	COLLISION_PACKET* p = (COLLISION_PACKET*)&model[h.collision_block + 4];
+	for (int i = 0; i < count && h.collision_block + 4 + (i + 1) * (int)sizeof(COLLISION_PACKET) <= (int)model.size(); i++)
+	{
+		int top = p[i].ypos - p[i].ysize / 2;
+		int bottom = p[i].ypos + p[i].ysize / 2;
+		if (top >= limit || bottom <= limit)
+			continue;
+
+		p[i].ysize = (int16_t)(bottom - limit);
+		p[i].ypos = (int16_t)((bottom + limit) / 2);
+	}
+}
+
 // Kerbs, steps and stands of Driver 1 carry long thin wall boxes (cut to a top of kMinBoxTop by ClampBoxHeights) along the kerb
 // stone: the car stops at the kerb instead of driving up on the pavement ("invisible walls" on pavements). Found with the map
 // editor box report: a low model (<= 250 high) with a box that is long (>= 1000), thin (<= 800) and stands at the clamp height.
