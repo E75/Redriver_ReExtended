@@ -1986,6 +1986,9 @@ int CreateStationaryCivCar(int direction, int orientX, int orientZ, LONGVECTOR4*
 #define PINGIN_DIST_WANTED_MULT			(10)
 #define PINGIN_DIST_MULT		(8)
 
+#define CIV_APPROACH_MIN_SPEED	50		// player speed above which only approaching cars spawn
+#define CIV_CRUISE_SPEED		40		// assumed speed of a new civilian car (hd.speed units)
+
 // [D] [T] [A] - some register is not properly decompiled
 int PingInCivCar(int minPingInDist)
 {
@@ -2542,6 +2545,25 @@ int PingInCivCar(int minPingInDist)
 	// [A] the car stands where its lane segment puts it, not on the spot: it must be out of view as well
 	if (!gOldSpawn && requestCopCar == 0 && minPingInDist != 666 && PositionInViewCone(pos[0], pos[2], CAR_VIEW_SPAWN_DISTANCE))
 		PING_FAIL(12);
+#endif
+
+#ifndef PSX
+	// [A] driving fast, a car that appears behind the player drives away from him and is never seen: keep only cars that
+	// approach (relative velocity of the car, assumed at cruising speed, against the player, as GTA III does)
+	if (!gOldSpawn && requestCopCar == 0 && minPingInDist != 666 && !gCivDeficit && civDat.thrustState != CIV_AI_THRUST_STOP &&
+		MainPlayer.playerType == PLAYER_TYPE_CAR && MainPlayer.playerCarId >= 0)
+	{
+		CAR_DATA* pc = &car_data[MainPlayer.playerCarId];
+
+		if (ABS(pc->hd.speed) > CIV_APPROACH_MIN_SPEED)
+		{
+			long long relX = (long long)RSIN(dir) * CIV_CRUISE_SPEED - (long long)RSIN(pc->hd.direction) * pc->hd.speed;
+			long long relZ = (long long)RCOS(dir) * CIV_CRUISE_SPEED - (long long)RCOS(pc->hd.direction) * pc->hd.speed;
+
+			if (relX * (pos[0] - MainPlayer.pos[0]) + relZ * (pos[2] - MainPlayer.pos[2]) >= 0)
+				PING_FAIL(13);
+		}
+	}
 #endif
 
 	count = 0;
