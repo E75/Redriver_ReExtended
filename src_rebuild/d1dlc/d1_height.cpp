@@ -143,6 +143,40 @@ bool D1HeightField::Init(const LevFile& d1, D1RoadMap&& roadMap, const D1ModelFl
 	return r.Ok();
 }
 
+// A pavement cell lies a kerb higher than its road neighbour and the map steps up at the cell edge: a wall the wheels cannot climb
+// (the car stops at the kerb, "invisible wall"). Next to a road cell the pavement height is brought down to the road over kKerbRamp.
+// y is in cell object sign (negative = up); a step of kMinKerb..kMaxKerb is a kerb, higher ones are walls or ramps.
+static int KerbRamp(const D1RoadMap& map, int cx, int cz, int vx, int vz, int y)
+{
+	const int kKerbRamp = 150, kMinKerb = 4;
+	const int lx = FloorMod(map.unitXMid + vx, kRoadCell);
+	const int lz = FloorMod(map.unitZMid - (vz - 750), kRoadCell);
+	const int nx[4] = { -1, 1, 0, 0 }, nz[4] = { 0, 0, -1, 1 };
+	const int dist[4] = { lx, kRoadCell - lx, lz, kRoadCell - lz };
+	int nearest = kKerbRamp, roadY = y;
+
+	for (int i = 0; i < 4; i++)
+	{
+		const int x = cx + nx[i], z = cz + nz[i];
+
+		if (x < 0 || z < 0 || x >= map.width || z >= map.height || dist[i] >= nearest)
+			continue;
+
+		const size_t index = (size_t)x + (size_t)z * map.width;
+		if (!map.present[index] || map.ids[index] >= 0x8000)
+			continue;
+
+		const int neighbourY = (int16_t)(map.values[index] & 0xFFFF);
+		if (y - neighbourY <= -kMinKerb && y - neighbourY >= -kMaxKerb)
+		{
+			nearest = dist[i];
+			roadY = neighbourY;
+		}
+	}
+
+	return roadY + (y - roadY) * nearest / kKerbRamp;
+}
+
 bool D1HeightField::Eval(int vx, int vz, D1Ground& out) const
 {
 	const int cx = FloorDiv(m_map.unitXMid + vx, kRoadCell);
@@ -223,7 +257,10 @@ bool D1HeightField::Eval(int vx, int vz, D1Ground& out) const
 	else if ((id & 0xC000) == 0x4000)
 		out.surface = 32 + 0x2000 + (id & 0x3FFF);
 	else if (id == 0x8000 && out.surface != kSurfaceWater)
+	{
 		out.surface = kSurfacePavement;
+		out.y = KerbRamp(m_map, cx, cz, vx, vz, out.y);
+	}
 
 	// the engine's MapHeight is positive = up (pedest.c: position.vy = -98 - MapHeight); the code above works in cell object sign
 	out.y = -out.y;
@@ -246,7 +283,7 @@ const int kTerrainTolerance = 48;
 
 int ToleranceFor(int surface, int scale = 1)
 {
-	return (surface >= 32 ? kTolerance : kTerrainTolerance) * scale;
+	return (surface >= 32 || surface == kSurfacePavement ? kTolerance : kTerrainTolerance) * scale;
 }
 							// a leaf is split further while its fit error is above this
 const int kMinSplit = 256;							// ... and wider than this
