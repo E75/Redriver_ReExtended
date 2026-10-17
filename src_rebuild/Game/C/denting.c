@@ -73,7 +73,7 @@ static unsigned char gWheelLost[MAX_CARS];		// bit per wheel (physics order: 0 a
 
 int gImpactDents = 1;							// option Impact Dents (Extended Settings), on by default: dents and lost wheels
 
-#define DENT_WHEEL_DAMAGE	80		// percent of the damage bar from which a hard hit at a wheel tears it off
+#define DENT_WHEEL_DAMAGE	99		// percent of the damage bar from which a hard hit at a wheel tears it off
 #define DENT_WHEEL_MIN_HIT	300		// damage value of that hit
 #define DENT_WHEEL_REACH	210		// how close (units, Driver 2 sized car) the hit must be to the wheel
 
@@ -87,28 +87,23 @@ static void MaybeLoseWheel(CAR_DATA* cp, int hx, int hz, int value, int scale)
 {
 	CAR_COSMETICS* cos = cp->ap.carCos;
 	const SVECTOR* wheelDisp = gD1WheelVisualOn[cp->ap.model] ? gD1WheelVisual[cp->ap.model] : cos->wheelDisp;	// Driver 1 cars: where the wheels are drawn
-	int i, best = -1;
-	long long bestDist = (long long)(DENT_WHEEL_REACH * scale >> 12) * (DENT_WHEEL_REACH * scale >> 12);
+	int i;
+	long long reach2 = (long long)(DENT_WHEEL_REACH * scale >> 12) * (DENT_WHEEL_REACH * scale >> 12);
 
 	if (cp->totalDamage * 100 < MaxPlayerDamage[0] * DENT_WHEEL_DAMAGE || value < DENT_WHEEL_MIN_HIT || (Random2(0) & 3) == 0)
 		return;
 
+	// every wheel within reach of the hit goes (a corner hit one wheel, a hit in the middle of the front or rear both)
 	for (i = 0; i < 4; i++)
 	{
 		// wheel position in model space (DrawCarWheels: x = -wheelDisp.vx, z = -wheelDisp.vz)
 		long long dx = hx + wheelDisp[i].vx, dz = hz + wheelDisp[i].vz, d2 = dx * dx + dz * dz;
 
-		if (!WheelIsLost(cp, i) && d2 < bestDist)
+		if (!WheelIsLost(cp, i) && d2 < reach2)
 		{
-			bestDist = d2;
-			best = i;
+			gWheelLost[cp->id] |= 1 << i;
+			gDentDirty[cp->id] = 1;
 		}
-	}
-
-	if (best >= 0)
-	{
-		gWheelLost[cp->id] |= 1 << best;
-		gDentDirty[cp->id] = 1;
 	}
 }
 
@@ -120,7 +115,8 @@ static void MaybeLoseWheel(CAR_DATA* cp, int hx, int hz, int value, int scale)
 #define DENT_MAX_TOTAL		110		// no vertex moves farther than this in all dents together
 #define DENT_FRONT_STRETCH	1.6f	// front and rear dents reach this much farther along the car
 #define DENT_SIDE_STRETCH	2.0f	// side dents reach from wheel to wheel
-#define DENT_ROOF_SAG		45		// percent of the dent depth the roof beside a side hit sinks
+#define DENT_CABIN_PERCENT	35		// percent of a dent that reaches the cabin (roof, windows, pillars): the driver's space stays whole
+#define DENT_ROOF_SAG		30		// percent of the dent depth the roof beside a side hit sinks
 #define DENT_ZONE_BLEND		3 / 10	// the damaged model is blended in at this part of the original strength: the dents carry the shape
 #define DENT_CRINKLE		15		// percent: the dent depth varies a bit from vertex to vertex
 
@@ -133,7 +129,7 @@ void ImpactDent(CAR_DATA* cp, int hx, int hy, int hz, int value)
 	int scale, depth, radius, maxTotal;
 	int dirX, dirY, dirZ, len, vi;
 	float zStretch, xStretch;
-	int frontRear, roofLine = -32767;
+	int frontRear, roofLine = -32767, beltLine, minY = 32767, maxY = -32767;
 
 	if (!gImpactDents || model == NULL || value <= 0 || model->num_vertices >= MAX_DENTING_VERTS)
 		return;
@@ -161,6 +157,14 @@ void ImpactDent(CAR_DATA* cp, int hx, int hy, int hz, int value)
 
 	// a hit on the front or the rear crumples back to the wheel arch and stays on its side of the car; a hit on the side
 	// pushes the doors straight in from wheel to wheel and presses the roof beside it down
+	for (vi = 0; vi < model->num_vertices; vi++)
+	{
+		minY = MIN(minY, clean[vi].vy);
+		maxY = MAX(maxY, clean[vi].vy);
+	}
+
+	beltLine = minY + (maxY - minY) * 55 / 100;		// y is down: above this line lies the cabin (roof, windows, pillars)
+
 	frontRear = ABS(hz - cos->cog.vz) > cos->colBox.vz * 6 / 10;
 
 	if (frontRear)
@@ -170,20 +174,11 @@ void ImpactDent(CAR_DATA* cp, int hx, int hy, int hz, int value)
 	}
 	else
 	{
-		int minY = 32767, maxY = -32767;
-
 		zStretch = DENT_SIDE_STRETCH;
 		xStretch = 1.0f;
-		depth = depth * 13 / 10;
 		dirX = dirX < 0 ? -4096 : 4096;
 		dirY = 0;
 		dirZ = 0;
-
-		for (vi = 0; vi < model->num_vertices; vi++)
-		{
-			minY = MIN(minY, clean[vi].vy);
-			maxY = MAX(maxY, clean[vi].vy);
-		}
 
 		roofLine = minY + (maxY - minY) * 35 / 100;		// y is down: the upper third of the body
 	}
@@ -206,6 +201,7 @@ void ImpactDent(CAR_DATA* cp, int hx, int hy, int hz, int value)
 			{
 				t = (int)((1.0f - sqrtf(r2)) * 4096);
 				sag = depth * DENT_ROOF_SAG / 100 * (t * t >> 12) >> 12;
+				sag = sag * DENT_CABIN_PERCENT / 100;
 			}
 		}
 
@@ -225,6 +221,9 @@ void ImpactDent(CAR_DATA* cp, int hx, int hy, int hz, int value)
 		// the middle of the car (cabin) resists: no dent when the vertex lies close to the centre line of the body
 		middle = SquareRoot0((px - cos->cog.vx) * (px - cos->cog.vx) + (pz - cos->cog.vz) * (pz - cos->cog.vz));
 		w = w * MIN(4096, middle * 4096 / (cos->colBox.vz / 2 + 1)) >> 12;
+
+		if (py < beltLine && ABS(pz - cos->cog.vz) < cos->colBox.vz * 6 / 10)
+			w = w * DENT_CABIN_PERCENT / 100;
 
 		w = w * (4096 + RSIN(vi * 977 + hx * 3 + hz * 7) * DENT_CRINKLE / 100) >> 12;
 		push = depth * w >> 12;
