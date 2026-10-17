@@ -31,7 +31,7 @@ Do not want to build it? Download **Redriver_ReExtended_v0.1-beta.zip** from the
 
 More: ground and water backdrops so the Driver 1 cities have no holes, kerb "invisible wall" removal, Driver 1 lane directions and traffic lights, D1 car models with fitted lamps and wheels (see [docs/dev-notes/d1-car-lamp-check.json](docs/dev-notes/d1-car-lamp-check.json)), an all-cities-cars option, and many fixes (endless loops, invisible cars, ped rendering).
 
-![All Driver 1 cars were checked for lamps and wheels](docs/images/d1_cars.jpg)
+<img src="docs/images/d1_cars.jpg" alt="All Driver 1 cars were checked for lamps and wheels" width="640">
 
 ## Volumetric lighting
 
@@ -45,15 +45,15 @@ Lights in the original game are flat sprites. Redriver ReExtended adds a small l
 
 The design notes are in [docs/dev-notes/volumetric-lighting.md](docs/dev-notes/volumetric-lighting.md), [part 2 (lamps)](docs/dev-notes/volumetric-lighting-part2-lamps.md) and [part 3 (sun shafts)](docs/dev-notes/volumetric-lighting-part3-sunshafts.md).
 
-![Chicago at night: headlight cones, lamp halos and glowing tail lights](docs/images/volumetric_night.jpg)
+<img src="docs/images/volumetric_night.jpg" alt="Chicago at night: headlight cones, lamp halos and glowing tail lights" width="640">
 
-![Helicopter over Chicago at night, with lit windows and lamp halos](docs/images/chopper_night.jpg)
+<img src="docs/images/chopper_night.jpg" alt="Helicopter over Chicago at night, with lit windows and lamp halos" width="640">
 
 ## Cinematic views
 
 Use the free camera (right stick or mouse) or `-camangle <n>` for side and rear quarter views, and `-choppertest` to fly the helicopter.
 
-![Taxi in New York at night](docs/images/taxi_newyork_night.jpg)
+<img src="docs/images/taxi_newyork_night.jpg" alt="Taxi in New York at night" width="640">
 
 ## How to set it up with your own game files
 
@@ -75,11 +75,11 @@ The game needs the files of your own Driver 2 discs **extracted on disk**, not o
 
 The game folder, next to `REDRIVER2_dev.exe`:
 
-![Game folder](docs/images/setup_1_game_folder.png)
+<img src="docs/images/setup_1_game_folder.png" alt="Game folder" width="380">
 
 `DRIVER2` after copying the files of your Driver 2 disc into it (`LEVELS` must hold `CHICAGO.LEV`, `HAVANA.LEV`, `RIO.LEV` and `VEGAS.LEV`):
 
-![DRIVER2 folder](docs/images/setup_2_driver2.png)
+<img src="docs/images/setup_2_driver2.png" alt="DRIVER2 folder" width="380">
 
 ### 3. Driver 1 cities (optional)
 
@@ -102,9 +102,9 @@ The game folder, next to `REDRIVER2_dev.exe`:
 
 What the Driver 1 folder should look like before you run `prepare_driver1.bat` (`DATA`, `LEVELS` and, for the story missions, `MISSIONS\MISSION.BLK`):
 
-![DRIVER1 folder](docs/images/setup_3_driver1.png)
+<img src="docs/images/setup_3_driver1.png" alt="DRIVER1 folder" width="380">
 
-![DRIVER1 LEVELS folder](docs/images/setup_4_driver1_levels.png)
+<img src="docs/images/setup_4_driver1_levels.png" alt="DRIVER1 LEVELS folder" width="380">
 
 See [docs/DRIVER1_SETUP.md](docs/DRIVER1_SETUP.md) for details and troubleshooting.
 
@@ -133,7 +133,7 @@ The original PlayStation layout is kept as a comment in `[controls_game]` of `co
 
 Pause (Esc / Start) > **Debug Options** has extra options, most of them new:
 
-![Fun Cheats in the debug menu](docs/images/debug_menu.jpg)
+<img src="docs/images/debug_menu.jpg" alt="Fun Cheats in the debug menu" width="640">
 
 - **Time of Day**: Day, Night, Dusk, Dawn and Clear, Rain, **Snow**, **Fog**.
 - **Fun Cheats**: Secret Car Fun, Jericho Mode, **Flying Car** (F8), **Infinite Mass** (F6, the car is not pushed by other cars), **Speed Boost Horn** (hold the horn to push the car forward, fun together with Infinite Mass) and **Chopper** (fly the helicopter).

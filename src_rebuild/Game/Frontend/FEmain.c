@@ -313,7 +313,8 @@ enum FEButtonAction
 	BTN_START_GAME = 2,
 	BTN_DISABLED = 3,
 	BTN_PREVIOUS_SCREEN = 4,
-	BTN_HIDDEN = 5
+	BTN_HIDDEN = 5,
+	BTN_RELOAD_SCREEN = 6	// stays on the screen and builds it again (labels follow the new state)
 };
 
 #define FE_MAKEVAR(code, value)		((code & 0xffff) << 8 | (value & 0xff))
@@ -919,6 +920,7 @@ void SetVariable(int var)
 			{
 				ShowSavingWaitMessage("Converting the Driver 1 cities, please wait", 0);
 				D1Dlc_CheckData();
+				gD1DlcEnabled = gD1DlcCityMask != 0 && gD1DlcPrepared != 0;	// a successful check switches the cities on
 			}							// looks for the Driver 1 data once and stores the answer in config.ini
 			else
 				gD1DlcEnabled = value && gD1DlcCityMask != 0;	// On needs the Driver 1 data
@@ -1766,6 +1768,10 @@ int HandleKeyPress(void)
 						pNewScreen = pScreenStack[ScreenDepth];
 						pNewButton = pButtonStack[ScreenDepth];
 					}
+					break;
+				case BTN_RELOAD_SCREEN:
+					(fpUserFunctions[pCurrScreen->userFunctionNum - 1])(1);
+					bRedrawFrontend = 1;
 					break;
 			}
 		}
@@ -4138,6 +4144,11 @@ int Driver1DlcScreen(int bSetup)
 			strcpy(checkName, "Not Found - Check Again");
 
 		BuildOptionButtons(3, gD1DlcCityMask ? names : namesNoData, FEVAR_D1DLC, gD1DlcEnabled);
+
+		// checking, switching on and off all happen on this one page: it only builds itself again
+		for (int i = 0; i < 3; i++)
+			pCurrScreen->buttons[i].action = FE_MAKEVAR(BTN_RELOAD_SCREEN, 0);
+
 		return 1;
 	}
 
