@@ -43,6 +43,7 @@ const char* const kRequiredModels[] = {
 	"PEDHEAD1", "GREENCONE", "CLEANWHEEL", "FASTWHEEL", "DAMWHEEL", "HUBCAP1",
 };
 
+const bool kReplaceWheels = true;			// test switch for the wheel models
 const int kMaxPages = 128;
 const int kMaxModels = 1536;				// MAX_MODEL_SLOTS
 const int kMaxStoredCluts = 320;			// palette cache of ProcessPalletLump
@@ -678,7 +679,8 @@ bool ConvertModels(ConvertContext& c)
 	{
 		// D1 has its own PEDHEAD1 (other origin, floats above the D2 neck, other texture layout): the D2 head replaces it
 		int existing = FindModel(city, name);
-		bool replaceHead = existing >= 0 && !strcmp(name, "PEDHEAD1");
+		// the wheel models of D1 are laid out differently from what MangleWheelModels (cars.c) expects: the D2 wheels replace them
+		bool replaceHead = existing >= 0 && (!strcmp(name, "PEDHEAD1") || (kReplaceWheels && (!strcmp(name, "CLEANWHEEL") || !strcmp(name, "FASTWHEEL") || !strcmp(name, "DAMWHEEL"))));
 
 		if (existing >= 0 && !replaceHead)
 			continue;

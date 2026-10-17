@@ -7,7 +7,7 @@
 
 #define D1DLC_DATA_FOLDER		"DRIVER1\\"
 #define D1DLC_CONVERTED_FOLDER	"DRIVER1\\CONVERTED\\"
-#define D1DLC_CONVERTER_VERSION	30// bump when the output format changes -> forces reconversion
+#define D1DLC_CONVERTER_VERSION	31// bump when the output format changes -> forces reconversion
 
 #define D1DLC_FIRST_CITY		4				// GameLevel of the first Driver 1 city
 #define D1DLC_NUM_CITIES		6

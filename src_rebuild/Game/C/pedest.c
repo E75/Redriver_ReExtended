@@ -505,7 +505,13 @@ static int PedFade(LPPEDESTRIAN pPed)
 	if (pPed->pedType == TANNER_MODEL)
 		return ONE;
 
-	return ObjectFade((int)sqrt((double)(dx * dx + dz * dz)), view, gPedSpawnFrame[pPed - pedestrians]);
+	const int dist = (int)sqrt((double)(dx * dx + dz * dz));
+
+	// close to the player a pedestrian is always fully drawn: the fade in is for the far ring only (a pedestrian that
+	// came out from behind a corner or a spawn beside the car was seen half transparent)
+	const int nearOpaque = 9000 * MAP_CELL_SIZE / 2048;
+
+	return ObjectFade(dist, view, dist < nearOpaque ? -1 : gPedSpawnFrame[pPed - pedestrians]);
 }
 #endif
 

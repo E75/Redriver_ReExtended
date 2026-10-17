@@ -1141,7 +1141,16 @@ void DrawCarWheels(CAR_DATA *cp, MATRIX *RearMatrix, VECTOR *pos, int zclip)
 
 		VertPtr = GET_MODEL_DATA(SVECTOR, model, vertices);
 
-		if (cp->ap.flags & (1 << wheelnum)) // [A] used appearance flags to store hubcap presence
+#ifndef PSX
+		// test switch: every wheel without its hubcap, to look at the damaged wheel model
+		static int forceDamaged = -1;
+		if (forceDamaged < 0)
+			forceDamaged = getenv("REDRIVER2_DAMWHEEL") != NULL;
+#else
+		const int forceDamaged = 0;
+#endif
+
+		if (forceDamaged || (cp->ap.flags & (1 << wheelnum))) // [A] used appearance flags to store hubcap presence
 		{
 			model = gDamWheelModelPtr;
 		}
