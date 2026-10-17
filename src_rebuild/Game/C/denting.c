@@ -480,6 +480,88 @@ void SetupSpecDenting(char *loadbuffer)
 	memcpy((u_char*)gHDCarDamageLevels[SPECIAL_CAR_SLOT], (u_char*)loadbuffer + offset, MAX_FILE_DAMAGE_LEVELS);
 }
 
+// [A] Driver 1 cars have no damage zone file: sort the vertices of the clean model into the six Driver 2 zones by position
+// (0 front +x, 1 front -x, 2 side -x, 3 rear -x, 4 rear +x, 5 side +x; the front is -z, measured in Chicago). The damaged model gives the dent.
+void D1BuildDamageZones(int slot)
+{
+	MODEL* clean = gCarCleanModelPtr[slot];
+	MODEL* dam = gCarDamModelPtr[slot];
+	SVECTOR* v;
+	int zone, k, n, minZ = 32767, maxZ = -32767, third;
+	int score[NUM_DAMAGE_ZONES][MAX_DAMAGE_ZONE_VERTS];
+	int count[NUM_DAMAGE_ZONES];
+
+	memset(gCarDamageZoneVerts[slot], 0xFF, sizeof(gCarDamageZoneVerts[slot]));
+	memset(gHDCarDamageZonePolys[slot], 0xFF, sizeof(gHDCarDamageZonePolys[slot]));
+	memset(gHDCarDamageLevels[slot], 0, sizeof(gHDCarDamageLevels[slot]));
+
+	if (clean == NULL || dam == NULL || clean->num_vertices != dam->num_vertices || clean->num_vertices > 255)
+		return;
+
+	v = GET_MODEL_DATA(SVECTOR, clean, vertices);
+
+	for (n = 0; n < clean->num_vertices; n++)
+	{
+		minZ = MIN(minZ, v[n].vz);
+		maxZ = MAX(maxZ, v[n].vz);
+	}
+
+	third = (maxZ - minZ) * 38 / 100;
+
+	// per zone the vertices farthest from the middle of the car stay, when more than the file format holds belong to it
+	for (zone = 0; zone < NUM_DAMAGE_ZONES; zone++)
+		for (k = 0; k < MAX_DAMAGE_ZONE_VERTS; k++)
+			score[zone][k] = -1;
+
+	for (n = 0; n < clean->num_vertices; n++)
+	{
+		int pos = v[n].vx >= 0;
+		int s;
+
+		if (v[n].vz < minZ + third)
+		{
+			zone = pos ? 0 : 1;
+			s = -v[n].vz;
+		}
+		else if (v[n].vz > maxZ - third)
+		{
+			zone = pos ? 4 : 3;
+			s = v[n].vz;
+		}
+		else
+		{
+			zone = pos ? 5 : 2;
+			s = ABS(v[n].vx);
+		}
+
+		// insert into the list of this zone, sorted by distance, shortest dropped when it is full
+		for (k = 0; k < MAX_DAMAGE_ZONE_VERTS; k++)
+		{
+			if (gCarDamageZoneVerts[slot][zone][k] == 0xFF || s > score[zone][k])
+			{
+				int m;
+
+				for (m = MAX_DAMAGE_ZONE_VERTS - 1; m > k; m--)
+				{
+					gCarDamageZoneVerts[slot][zone][m] = gCarDamageZoneVerts[slot][zone][m - 1];
+					score[zone][m] = score[zone][m - 1];
+				}
+
+				gCarDamageZoneVerts[slot][zone][k] = n;
+				score[zone][k] = s;
+				break;
+			}
+		}
+	}
+
+	for (zone = 0; zone < NUM_DAMAGE_ZONES; zone++)
+		for (k = 0, count[zone] = 0; k < MAX_DAMAGE_ZONE_VERTS && gCarDamageZoneVerts[slot][zone][k] != 0xFF; k++)
+			count[zone]++;
+
+	printInfo("D1 damage zones slot %d: %d vertices in zones %d %d %d %d %d %d\n", slot, clean->num_vertices,
+		count[0], count[1], count[2], count[3], count[4], count[5]);
+}
+
 // [D] [T]
 void LoadDenting(int level)
 {
@@ -492,6 +574,9 @@ void LoadDenting(int level)
 		memset(gCarDamageZoneVerts, 0xFF, sizeof(gCarDamageZoneVerts));
 		memset(gHDCarDamageZonePolys, 0xFF, sizeof(gHDCarDamageZonePolys));
 		memset(gHDCarDamageLevels, 0, sizeof(gHDCarDamageLevels));
+
+		for (int slot = 0; slot < MAX_CAR_RESIDENT_MODELS; slot++)
+			D1BuildDamageZones(slot);
 	}
 }
 

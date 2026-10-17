@@ -58,7 +58,7 @@ extern void ReloadIcons(); // 0x00081118
 void LoadTPageFromTIMs(int tpage2send);
 void LoadPermanentTPagesFromTIM();
 int LoadSpecialSlotFromLevel(int model);
-int LoadSpecialSlotPages(char* all, const XYPAIR* list, int count, int src1, int src2, int dest1, int dest2);
+int LoadSpecialSlotPages(char* all, const XYPAIR* list, int count, int src1, int src2, int dest1, int dest2, int firstSlot = -1);
 
 // [A] the TPAGE lump of a LEV file: permanent pages, then special pages, each sector aligned (day night cycle)
 struct LEV_TPAGES

@@ -1,5 +1,6 @@
 #include "driver2.h"
 #include "pedest.h"
+#include "playermodel.h"
 #include "players.h"
 #include "mission.h"
 #include "objcoll.h"
@@ -173,7 +174,7 @@ void SetTannerPosition(VECTOR* pVec)
 	pPed = pUsedPeds;
 	while (pPed)
 	{
-		if (pPed->pedType == TANNER_MODEL || ActiveCheats.cheat12 && pPed->pedType == OTHER_MODEL)
+		if (IS_PLAYER_PED(pPed))
 		{
 			pPed->position.vx = pVec->vx;
 			pPed->position.vy = -pVec->vy;
@@ -241,7 +242,7 @@ void DestroyPedestrians(void)
 {
 	while (pUsedPeds)
 	{
-		if (pUsedPeds->pedType == TANNER_MODEL || ActiveCheats.cheat12 && pUsedPeds->pedType == OTHER_MODEL)
+		if (IS_PLAYER_PED(pUsedPeds))
 			numTannerPeds--;
 
 		DestroyPedestrian(pUsedPeds);
@@ -743,7 +744,7 @@ void AnimatePed(LPPEDESTRIAN pPed)
 			pPed->frame1 = 0;
 	}
 
-	if ((pPed->pedType == TANNER_MODEL || (ActiveCheats.cheat12 && pPed->pedType == OTHER_MODEL)) && pPed->type < PED_ACTION_BACK)
+	if (IS_PLAYER_PED(pPed) && pPed->type < PED_ACTION_BACK)
 	{
 		int surfId;
 		surfId = PedSurfaceType(&vec);
@@ -3154,7 +3155,7 @@ int ActivatePlayerPedestrian(CAR_DATA* pCar, char* padId, int direction, LONGVEC
 				int rnd1 = Random2(0);
 				int rnd2 = Random2(0);
 				
-				pedptr->pallet = rnd1 - rnd1 / 3 * 3 + (rnd2 - rnd2 / 3 * 3) * 16;
+				pedptr->pallet = (gPlayerModel == OTHER_SPRITE && gPlayerPallet >= 0) ? gPlayerPallet : rnd1 - rnd1 / 3 * 3 + (rnd2 - rnd2 / 3 * 3) * 16;
 			}
 		}
 	}
