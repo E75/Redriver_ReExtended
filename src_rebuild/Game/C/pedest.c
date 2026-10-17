@@ -2735,12 +2735,6 @@ void IHaveThePower(void)
 	}
 }
 
-#define AUTO_ENTER_RANGE		2500	// pressing enter this close to a car walks Tanner to it
-#define AUTO_ENTER_TICKS		240
-
-static CAR_DATA* sAutoEnterCar = NULL;
-static int sAutoEnterTicks = 0;
-
 #define TANNER_CAM_TURN_RATE	320		// heading units per tick towards the pad direction (180 degrees in 7 ticks)
 
 // [A] GTA style walking: the pad direction is relative to the orbit camera, Tanner turns towards it and runs
@@ -2784,59 +2778,6 @@ static void TannerPadCameraRelative(LPPEDESTRIAN pPed, PLAYER* lcp, int padId, u
 
 	// swing to the target heading within a few ticks while already running (no turning on the spot first)
 	pPed->dir.vy += MAX(-TANNER_CAM_TURN_RATE, MIN(diff, TANNER_CAM_TURN_RATE));
-	tannerPad |= TANNER_PAD_GOFORWARD;
-}
-
-// [A] walk to the side of the car chosen by DeActivatePlayerPedestrian and get in; any stick or key input cancels
-static void StepAutoEnterCar(LPPEDESTRIAN pPed, u_int pad, char PadSteer, char use_analogue, int padId)
-{
-	CAR_DATA* cp;
-	int dx, dz, distSq, d, half, ox, oz, tx, tz, diff;
-
-	cp = sAutoEnterCar;
-
-	if (cp == NULL)
-		return;
-
-	dx = cp->hd.where.t[0] - pPed->position.vx;
-	dz = cp->hd.where.t[2] - pPed->position.vz;
-	distSq = dx * dx + dz * dz;
-
-	if ((pad & (TANNER_PAD_GOFORWARD | TANNER_PAD_GOBACK | TANNER_PAD_TURNLEFT | TANNER_PAD_TURNRIGHT)) ||
-		(use_analogue && (ABS(PadSteer) >= 32 || ABS(Pads[padId].mapanalog[3]) >= 32)) ||
-		cp->controlType == CONTROL_TYPE_NONE || ++sAutoEnterTicks > AUTO_ENTER_TICKS ||
-		distSq > 4000 * 4000 || pPed->fpAgitatedState != NULL)
-	{
-		sAutoEnterCar = NULL;
-		return;
-	}
-
-	if (TannerCanEnterCar(cp, distSq))
-	{
-		sAutoEnterCar = NULL;
-		DeActivatePlayerPedestrian(pPed);
-		return;
-	}
-
-	// aim at the door side of the car that is nearer to Tanner
-	d = cp->hd.direction;
-	half = car_cosmetics[cp->ap.model].colBox.vx + 90;
-	ox = -FIXED(half * RCOS(d));
-	oz = FIXED(half * RSIN(d));
-
-	if ((-dx) * -RCOS(d) + (-dz) * RSIN(d) < 0)
-	{
-		ox = -ox;
-		oz = -oz;
-	}
-
-	tx = cp->hd.where.t[0] + ox;
-	tz = cp->hd.where.t[2] + oz;
-
-	diff = DIFF_ANGLES(pPed->dir.vy - 2048, ratan2(tx - pPed->position.vx, tz - pPed->position.vz));
-	pPed->dir.vy += MAX(-TANNER_CAM_TURN_RATE, MIN(diff, TANNER_CAM_TURN_RATE));
-
-	tannerPad &= ~(TANNER_PAD_GOFORWARD | TANNER_PAD_GOBACK | TANNER_PAD_TURNLEFT | TANNER_PAD_TURNRIGHT);
 	tannerPad |= TANNER_PAD_GOFORWARD;
 }
 
@@ -2885,8 +2826,6 @@ void ProcessTannerPad(LPPEDESTRIAN pPed, u_int pad, char PadSteer, char use_anal
 
 	if (lcp->camFoot && lcp->cameraView == 0 && lcp->dying == 0 && pPed->type != PED_ACTION_SIT)
 		TannerPadCameraRelative(pPed, lcp, padId, pad, PadSteer, use_analogue);
-
-	StepAutoEnterCar(pPed, pad, PadSteer, use_analogue, padId);
 
 	IHaveThePower();	// process Havana easter egg near the entrance cemetery
 
@@ -3273,11 +3212,6 @@ void DeActivatePlayerPedestrian(LPPEDESTRIAN pPed)
 		getIn = FindPointOfCollision(cp, pPed);
 	else if (cp && TannerCanEnterCar(cp, distToCarSq))
 		getIn = 1;
-	else if (cp->ap.model != SPECIAL_CAR_SLOT && distToCarSq < AUTO_ENTER_RANGE * AUTO_ENTER_RANGE && TannerCanEnterCar(cp, 0))
-	{
-		sAutoEnterCar = cp;
-		sAutoEnterTicks = 0;
-	}
 
 	if (getIn != 0)
 	{
