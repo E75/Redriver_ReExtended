@@ -1,0 +1,95 @@
+# Redriver ReExtended
+
+**Driver 2 on PC, extended with the Driver 1 cities, a free camera, on-foot play, weather, a day and night cycle, a 10x draw distance and an in-game map editor.**
+
+Redriver ReExtended is a fork of [REDRIVER2](https://github.com/OpenDriver2/REDRIVER2) (the reverse-engineered Driver 2 by SoapyMan and contributors). Everything in the original game still works as before; the new features are optional and can be switched on in the menu.
+
+> **No game data is included.** You need your own copy of Driver 2 (PlayStation, required) and optionally Driver 1 (PlayStation, for the extra cities). Nothing of either game is distributed here: the Driver 1 cities are converted on your own PC, from your own disc files.
+
+![Miami](docs/images/miami.jpg)
+
+## What is new
+
+| Feature | Screenshot |
+|---|---|
+| **Driver 1 cities** in Take a Ride: Miami, San Francisco, Los Angeles (night), New York, Newcastle and the (empty) Training ground, with Driver 2 traffic, cops, pedestrians and on-foot play. 24 Driver 1 story missions under Undercover > D1 Missions. | ![San Francisco](docs/images/frisco.jpg) |
+| **Draw distance** up to "10x" with distance fog and an HD sky; far objects fade in instead of popping up. | ![Aerial view](docs/images/miami_aerial.jpg) |
+| **Weather**: rain with wet-road reflections, snow, fog. All lights and car lamps work in the weather. | ![Rain](docs/images/chicago_rain.jpg) ![Snow](docs/images/chicago_snow.jpg) |
+| **Day and night cycle**: a continuous 24 hour clock, the sun moves, shadows follow, the sky blends. | ![Dusk](docs/images/chicago_dusk.jpg) |
+| **Traffic and people** density 1x to 10x, cars that fade in, parked cars, jam breaker. | ![Crowd](docs/images/newyork.jpg) |
+| **Free camera**: right stick / mouse orbits the chase camera. On foot the camera is GTA style and the pad walks relative to it. | ![On foot](docs/images/onfoot.jpg) |
+| **Night driving**: volumetric headlights, glowing lamps, car gloss in the sun, broken lamps stay dark. | ![Los Angeles at night](docs/images/la_night.jpg) |
+| **Newcastle and Training ground** (the two smallest Driver 1 levels). | ![Newcastle](docs/images/newcastle.jpg) ![Training](docs/images/training.jpg) |
+| **Map editor** (`-editor` or F4 in a dev build): top-down camera, move or delete props, remove collision boxes, saved per city. | ![Map editor](docs/images/map_editor.jpg) |
+
+More: ground and water backdrops so the Driver 1 cities have no holes, kerb "invisible wall" removal, Driver 1 lane directions and traffic lights, D1 car models with fitted lamps and wheels (see [docs/dev-notes/d1-car-lamp-check.json](docs/dev-notes/d1-car-lamp-check.json)), an all-cities-cars option, and many fixes (endless loops, invisible cars, ped rendering).
+
+![All Driver 1 cars were checked for lamps and wheels](docs/images/d1_cars.jpg)
+
+## How to set it up with your own game files
+
+### 1. Get the game
+
+Either download a build from the Releases page (if there is one) or build it yourself (see below). You get `REDRIVER2_dev.exe` and a few DLLs (`SDL2.dll`, `OpenAL32.dll`).
+
+### 2. Driver 2 files (required)
+
+1. Make a game folder and put the exe and the DLLs in it.
+2. Copy the contents of the `data` folder of this repository into it (`config.ini`, `DRIVER2\`, `install\`).
+3. Put your Driver 2 CD images next to the install folder as `install\Driver2CD1.bin` and `install\Driver2CD2.bin` (the game reads them directly; the path is `[cdfs] image=` in `config.ini`). Videos and music are converted once with `_convert_cd_fmv_xa.bat` (needs Java; it uses the included jpsxdec).
+4. Start `REDRIVER2_dev.exe`. The detailed original instructions are in the [upstream wiki](https://github.com/OpenDriver2/REDRIVER2/wiki/Installation-instructions).
+
+### 3. Driver 1 cities (optional)
+
+1. Copy the `LEVELS` and `DATA` folders of your Driver 1 disc into a folder `DRIVER1` next to the `DRIVER2` folder:
+
+   ```
+   REDRIVER2_dev.exe
+   config.ini
+   DRIVER2\...
+   DRIVER1\LEVELS\MIAMI.LEV, FRISCO.LEV, LA.LEV, NEWYORK.LEV, CREDITS.LEV, TRAIN.LEV
+   DRIVER1\DATA\...
+   DRIVER1\MISSIONS\MISSION.BLK      (for the story missions)
+   ```
+
+2. Convert once, either:
+   - run `tools\prepare_driver1.bat` (copy it next to the exe first), or
+   - in the game: Options > Gameplay > Secret > Extended Settings > **Driver 1 DLC** > **Check Driver 1 Data**. A message asks you to wait (about a minute). Then switch the option **On**.
+3. The result is stored in `config.ini` (`[d1dlc]`), so the game never scans again. The converted files are written to `DRIVER1\CONVERTED\` on your PC.
+4. Take a Ride > **Driver 1 Cities**, or Undercover > **D1 Missions**.
+
+See [docs/DRIVER1_SETUP.md](docs/DRIVER1_SETUP.md) for details and troubleshooting.
+
+### 4. Switching the new features on
+
+Options > Gameplay > Secret > **Extended Settings** lists: Draw Distance, Traffic And People, Free Camera, Day Night Cycle, All Cities Cars, Sky, Driver 1 DLC. Weather and time of day can be changed in the debug pause menu, and `config.ini` has the same settings (`[game]`, `[render]`, `[d1dlc]`).
+
+Useful options on the command line: `-city <n> -mission 50` (start Take a Ride directly), `-cycle <minutes> -hour <h>`, `-weather 1|3`, `-fog`, `-drawdist 0|1|2`, `-crowd 1..5`, `-onfoot`, `-editor`, `-shot <frame>` (writes `SCREENSHOT.BMP`).
+
+## Building (Windows)
+
+Needs Visual Studio 2022 or the Build Tools (v143 or newer), PowerShell and git.
+
+```powershell
+git clone --recurse-submodules https://github.com/E75/Redriver_ReExtended.git
+cd Redriver_ReExtended
+.\windows_dev_prepare.ps1          # downloads premake, SDL2, OpenAL, libjpeg; the last "open .sln" step may report an error, that is harmless
+cd src_rebuild
+$env:SDL2_DIR = ".\dependencies\SDL2-2.30.2"
+$env:OPENAL_DIR = ".\dependencies\openal-soft-1.23.1-bin"
+$env:JPEG_DIR = ".\dependencies\jpeg-9d"
+.\premake5.exe vs2022
+MSBuild build\REDRIVER2.sln -p:Configuration=Release_dev -p:Platform=Win32 -m
+```
+
+The exe is written to `src_rebuild\bin\Release_dev`. Only the 32 bit Windows build is tested.
+
+## Credits
+
+- Everything of the original reverse engineering: **SoapyMan**, **Fireboyd78**, **Krishty**, **someone972**, **Gh0stBlade** (Psy-X base), Ben Lincoln (TDR), Stohrendorf (Symdump) and the other [OpenDriver2](https://github.com/OpenDriver2) contributors.
+- The ReExtended features (Driver 1 conversion, weather, cycle, camera, editor and the fixes) were made by E75 with the help of Claude.
+- Driver and Driver 2 are trademarks of their owners. This project contains no game assets and is not affiliated with Ubisoft or Reflections.
+
+License: MIT (see [LICENSE](LICENSE)). The graphics layer lives in [E75/PsyCross](https://github.com/E75/PsyCross) (also MIT, based on the [OpenDriver2 PsyCross](https://github.com/OpenDriver2/PsyCross)).
+
+Developer notes (formats, engine findings, plans): [docs/DEVELOPER_NOTES.md](docs/DEVELOPER_NOTES.md) and [docs/dev-notes/](docs/dev-notes/).

@@ -1,0 +1,27 @@
+#ifndef FELONY_H
+#define FELONY_H
+
+#define FELONY_PURSUIT_MIN_VALUE	(658)
+#define FELONY_ROADBLOCK_MIN_VALUE	(1318)
+
+#define FELONY_MAX_VALUE			(4096)
+
+extern int CopsCanSeePlayer;
+extern short pedestrianFelony;
+
+#define GetPlayerFelony(pl) ((pl)->playerCarId < 0 ? &pedestrianFelony : &car_data[(pl)->playerCarId].felonyRating)
+
+extern FELONY_DATA felonyData;
+
+extern void InitFelonySystem(); // 0x0004D280
+extern void CheckPlayerMiscFelonies(); // 0x0004CC28
+
+extern char GetCarDirectionOfTravel(CAR_DATA* cp); // 0x0004D430
+extern char GetPlayerDirectionOfTravel(PLAYER* pl);
+
+extern void CarHitByPlayer(CAR_DATA* victim, int howHard); // 0x0004D2B8
+
+extern void NoteFelony(FELONY_DATA *pFelonyData, char type, short scale); // 0x0004C330
+extern void AdjustFelony(FELONY_DATA *pFelonyData); // 0x0004C8B4
+
+#endif

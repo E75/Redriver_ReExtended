@@ -1,0 +1,499 @@
+#include "driver2.h"
+#include "denting.h"
+#include "system.h"
+#include "mission.h"
+#include "cars.h"
+#include "convert.h"
+#include "pause.h"
+#include "camera.h"
+#include "draw.h"
+#include "dr2roads.h"
+#include "debris.h"
+#include "players.h"
+#include "main.h"
+
+#if USE_PC_FILESYSTEM
+extern int gContentOverride;
+
+// [A] loads car model from file
+char* LoadCustomCarDentingFromFile(char* dest, int modelNumber)
+{
+	char* mem;
+	char filename[64];
+
+	sprintf(filename, "LEVELS\\%s\\CARMODEL_%d.DEN", LevelNames[GameLevel], modelNumber);
+	if (FileExists(filename))
+	{
+		mem = dest ? dest : ((char*)_other_buffer + modelNumber * 4096);
+
+		// get model from file
+		Loadfile(filename, mem);
+		return mem;
+	}
+
+	return NULL;
+}
+#endif
+
+char* DentingFiles[] =
+{
+	"LEVELS\\CHICAGO.DEN",
+	"LEVELS\\HAVANA.DEN",
+	"LEVELS\\VEGAS.DEN",
+	"LEVELS\\RIO.DEN",
+};
+
+// DO NOT CHANGE THIS!
+#define NUM_DAMAGE_ZONES			6
+#define MAX_FILE_DAMAGE_ZONE_VERTS	50
+#define MAX_FILE_DAMAGE_ZONE_POLYS	70
+#define MAX_FILE_DAMAGE_LEVELS		256
+
+u_char gCarDamageZoneVerts[MAX_CAR_RESIDENT_MODELS][NUM_DAMAGE_ZONES][MAX_DAMAGE_ZONE_VERTS];
+u_char gHDCarDamageZonePolys[MAX_CAR_RESIDENT_MODELS][NUM_DAMAGE_ZONES][MAX_DAMAGE_ZONE_POLYS];
+u_char gHDCarDamageLevels[MAX_CAR_RESIDENT_MODELS][MAX_DAMAGE_LEVELS];	// the damage level (texture) count for polygons
+
+// [D] [T]
+void InitialiseDenting(void)
+{
+	LoadDenting(BASE_CITY);
+	InitHubcap();
+}
+
+// [D] [T]
+void DentCar(CAR_DATA *cp)
+{
+	int Zone;
+	int Damage;
+	int MaxDamage;
+	DENTUVS *dentptr;
+	SVECTOR *CleanVertPtr;
+	int VertNo;
+	unsigned char *DamPtr;
+	SVECTOR *DamVertPtr;
+	MODEL *pCleanModel;
+	int model;
+	int Poly;
+
+	short tempDamage[256];
+	memset((u_char*)tempDamage, 0, sizeof(tempDamage));
+
+	MaxDamage = 0;
+	model = cp->ap.model;
+	cp->lowDetail = -1;
+	cp->ap.qy = 0;
+	cp->ap.qw = 0;
+
+	pCleanModel = gCarCleanModelPtr[model];
+
+	// collect vertices from zones
+	if (pCleanModel != NULL) 
+	{
+		for (VertNo = 0; VertNo < pCleanModel->num_vertices; VertNo++)
+			tempDamage[VertNo] = 0;
+
+		for (Zone = 0; Zone < NUM_DAMAGE_ZONES; Zone++)
+		{
+			Damage = cp->ap.damage[Zone];
+
+			if (Damage > MaxDamage)
+				MaxDamage = Damage;
+
+			DamPtr = gCarDamageZoneVerts[cp->ap.model][Zone];
+
+			for (VertNo = 0; VertNo < MAX_DAMAGE_ZONE_VERTS && *DamPtr != 0xFF; VertNo++, DamPtr++)
+			{
+				if (tempDamage[*DamPtr] == 0)
+					tempDamage[*DamPtr] += Damage;
+				else 
+					tempDamage[*DamPtr] += Damage / 2;
+			}
+		} 
+	}
+
+	// update vertices positon
+	if (gCarCleanModelPtr[model] != NULL && gCarDamModelPtr[model] != NULL) 
+	{
+		DamVertPtr = GET_MODEL_DATA(SVECTOR, gCarDamModelPtr[model], vertices);
+		CleanVertPtr = GET_MODEL_DATA(SVECTOR, gCarCleanModelPtr[model], vertices);
+
+		for (VertNo = 0; VertNo < pCleanModel->num_vertices; VertNo++, DamVertPtr++, CleanVertPtr++)
+		{
+			gTempCarVertDump[cp->id][VertNo].vx = CleanVertPtr->vx + FIXEDH((DamVertPtr->vx - CleanVertPtr->vx) * tempDamage[VertNo] / 2);
+			gTempCarVertDump[cp->id][VertNo].vy = CleanVertPtr->vy + FIXEDH((DamVertPtr->vy - CleanVertPtr->vy) * tempDamage[VertNo] / 2);
+			gTempCarVertDump[cp->id][VertNo].vz = CleanVertPtr->vz + FIXEDH((DamVertPtr->vz - CleanVertPtr->vz) * tempDamage[VertNo] / 2);
+		}
+	}
+
+	// update polygon UVs
+	if (pCleanModel != NULL) 
+	{
+		dentptr = gTempHDCarUVDump[cp->id];
+
+		// reset UV coordinates
+		
+		for (Poly = 0; Poly < pCleanModel->num_polys; Poly++)
+		{
+			dentptr->u3 = 0;
+			dentptr++;
+		}
+
+		for(Zone = 0; Zone < NUM_DAMAGE_ZONES; Zone++)
+		{
+			Damage = cp->ap.damage[Zone];
+
+			for (Poly = 0; Poly < MAX_DAMAGE_ZONE_POLYS; Poly++)
+			{
+				if (gHDCarDamageZonePolys[cp->ap.model][Zone][Poly] == 0xFF)
+					break;
+
+				dentptr = gTempHDCarUVDump[cp->id] + gHDCarDamageZonePolys[cp->ap.model][Zone][Poly];
+
+				// add a damage level
+				dentptr->u3 += (Damage >> 0xA);
+
+				// clamp level
+				if (dentptr->u3 > 2)
+					dentptr->u3 = 2;
+			}
+		}
+
+		DamPtr = gHDCarDamageLevels[model];
+		dentptr = gTempHDCarUVDump[cp->id];
+
+		for (Poly = 0; Poly < pCleanModel->num_polys; Poly++, DamPtr++, dentptr++)
+		{
+			// calculate the UV offset with strange XORs
+			if(dentptr->u3 > 0)
+				dentptr->u3 = (*DamPtr ^ 1 ^ (*DamPtr ^ 1 | dentptr->u3)) * 64;
+		}
+	}
+}
+
+// [D] [T]
+void CreateDentableCar(CAR_DATA *cp)
+{
+	MODEL *srcModel;
+	SVECTOR *dst;
+	int count;
+	SVECTOR *src;
+	int vcount;
+	int model;
+
+	model = cp->ap.model;
+
+	srcModel = gCarCleanModelPtr[model];
+	if (srcModel != NULL)
+	{
+		src = GET_MODEL_DATA(SVECTOR, srcModel, vertices);
+		dst = gTempCarVertDump[cp->id];
+
+		vcount = srcModel->num_vertices;
+
+		while (vcount-- != -1) 
+			*dst++ = *src++;
+
+		for (count = 0; count < srcModel->num_polys; count++)
+		{
+			gTempHDCarUVDump[cp->id][count].u3 = 0;
+		}
+	}
+	else
+	{
+		printError("gCarCleanModelPtr is NULL in CreateDentableCar\n");
+	}
+
+	srcModel = gCarLowModelPtr[model];
+	if (srcModel != NULL)
+	{
+		for (count = 0; count < srcModel->num_polys; count++)
+		{
+			gTempLDCarUVDump[cp->id][count].u3 = 0;
+		}
+	}
+	else
+	{
+		printError("gCarLowModelPtr is NULL in CreateDentableCar\n");
+	}
+
+	if (gDontResetCarDamage == 0) 
+	{
+		for (count = 0; count < NUM_DAMAGE_ZONES; count++)
+		{
+			cp->ap.damage[count] = 0;
+		}
+
+		cp->totalDamage = 0;
+	}
+}
+
+extern HUBCAP gHubcap;
+int gHubcapTime = 0;
+
+// [D] [T]
+void InitHubcap(void)
+{
+	gHubcapTime = Random2(1) & 0x7ff;
+}
+
+
+// [D] [T]
+void LoseHubcap(int car, int Hubcap, int Velocity)
+{
+	SVECTOR InitialLocalAngle = { 0, 0, 10 };
+	CAR_DATA* cp;
+
+	SVECTOR* wheelDisp;
+	
+	cp = &car_data[car];
+
+	// check speed and if hubcap lost
+	if (cp->hd.wheel_speed < 0 || (cp->ap.flags & 1 << Hubcap))
+		return;
+
+	wheelDisp = &cp->ap.carCos->wheelDisp[Hubcap];
+
+	cp->ap.flags |= (1 << Hubcap);		// [A] cars now hold hubcaps
+
+	gHubcap.Position.vx = wheelDisp->vx;
+	gHubcap.Position.vy = wheelDisp->vy;
+	gHubcap.Position.vz = wheelDisp->vz;
+
+	SetRotMatrix(&cp->hd.where);
+	_MatrixRotate(&gHubcap.Position);
+
+	gHubcap.Position.vx += cp->hd.where.t[0];
+	gHubcap.Position.vy -= cp->hd.where.t[1];
+	gHubcap.Position.vz += cp->hd.where.t[2];
+
+	gHubcap.Orientation = cp->hd.where;
+	gHubcap.Rotation = 0;
+	
+	if (Hubcap > 1)
+	{
+		gHubcap.Orientation.m[0][0] = -gHubcap.Orientation.m[0][0];
+		gHubcap.Orientation.m[1][0] = -gHubcap.Orientation.m[1][0];
+
+		gHubcap.Orientation.m[2][0] = -gHubcap.Orientation.m[2][0];
+		gHubcap.Orientation.m[0][2] = -gHubcap.Orientation.m[0][2];
+
+		gHubcap.Orientation.m[1][2] = -gHubcap.Orientation.m[1][2];
+		gHubcap.Orientation.m[2][2] = -gHubcap.Orientation.m[2][2];
+	}
+
+	gHubcap.Duration = 100;
+	
+	gHubcap.Direction.vx = FIXEDH(FIXEDH(cp->st.n.angularVelocity[1]) * wheelDisp->vz) + FIXEDH(cp->st.n.linearVelocity[0]);
+	gHubcap.Direction.vy = FIXEDH(cp->st.n.linearVelocity[1]);
+	gHubcap.Direction.vz = FIXEDH(-FIXEDH(cp->st.n.angularVelocity[1]) * wheelDisp->vx) + FIXEDH(cp->st.n.linearVelocity[2]);
+}
+
+
+// [A]
+void HandlePlayerHubcaps(int playerId)
+{
+	int VelocityMagnitude;
+	CAR_DATA* cp;
+	int playerCarId;
+
+	playerCarId = player[playerId].playerCarId;
+
+	if (playerCarId < 0)
+		return;
+
+	cp = &car_data[playerCarId];
+
+	if (gHubcap.Duration < 1 && gHubcapTime == 0)
+	{
+		VelocityMagnitude = cp->st.n.angularVelocity[0] + cp->st.n.angularVelocity[1] + cp->st.n.angularVelocity[2];
+
+		if (VelocityMagnitude < -1000000)
+		{
+			LoseHubcap(playerCarId, Random2(2) & 1, VelocityMagnitude);
+			VelocityMagnitude = 3;
+		}
+		else if (VelocityMagnitude > 1000001)
+		{
+			LoseHubcap(playerCarId, Random2(4) & 1 | 2, VelocityMagnitude);
+			VelocityMagnitude = 5;
+		}
+		else
+			return;
+
+		gHubcapTime = Random2(VelocityMagnitude) & 0x417;
+	}
+}
+
+// [D] [T]
+void MoveHubcap()
+{
+	int CurrentMapHeight;
+	int savecombo;
+	int cmb;
+	VECTOR ShadowPos;
+	VECTOR Position;
+	MATRIX Orientation;
+	CVECTOR col = {72,72,72};
+
+	InitMatrix(Orientation);
+
+	if (pauseflag == 0)
+	{
+		if(gHubcapTime > 0)
+			gHubcapTime--;
+	}
+
+	// draw current hubcap
+	if (gHubcap.Duration > 0) 
+	{
+		if (pauseflag == 0 && CurrentPlayerView == 0)
+		{
+			gHubcap.Duration--;
+
+			// move hubcap
+			gHubcap.Position.vx += gHubcap.Direction.vx;
+			gHubcap.Position.vy += gHubcap.Direction.vy;
+			gHubcap.Position.vz += gHubcap.Direction.vz;
+
+			gHubcap.Rotation -= 220;
+
+			_RotMatrixX(&Orientation, gHubcap.Rotation);
+
+			gHubcap.Direction.vy += 5;
+
+			CurrentMapHeight = MapHeight(&gHubcap.Position);
+
+			if (gHubcap.Position.vy >= -40 - CurrentMapHeight)
+			{
+				gHubcap.Direction.vy = -(gHubcap.Direction.vy / 2);
+				gHubcap.Position.vy = -40 - CurrentMapHeight;
+			}
+		}
+
+		MulMatrix0(&gHubcap.Orientation, &Orientation, &Orientation);
+
+		ShadowPos.vx = gHubcap.Position.vx - camera_position.vx;
+		ShadowPos.vy = -MapHeight(&gHubcap.Position);
+		ShadowPos.vz = gHubcap.Position.vz - camera_position.vz;
+
+		Position.vx = ShadowPos.vx;
+		Position.vy = gHubcap.Position.vy - camera_position.vy;
+		Position.vz = ShadowPos.vz;
+
+		SetRotMatrix(&inv_camera_matrix);
+
+		_MatrixRotate(&Position);
+		savecombo = combointensity;
+
+		if (gTimeOfDay == TIME_NIGHT)
+		{
+			cmb = (combointensity & 255) / 3;
+			combointensity = cmb << 0x10 | cmb << 8 | cmb;
+		}
+
+		RenderModel(gHubcapModelPtr, &Orientation, &Position, 0, 0, 0, 0);
+		ShadowPos.vy -= camera_position.vy;
+
+		combointensity = savecombo;
+
+		RoundShadow(&ShadowPos, &col, 65);
+	}
+}
+
+// [D] [T]
+void ProcessDentLump(char *lump_ptr, int lump_size)
+{
+	int model;
+	int i;
+	int offset;
+	u_char* mem;
+
+	for (i = 0; i < MAX_CAR_RESIDENT_MODELS; i++)
+	{
+		model = residentCarModels[i];
+
+		if (model == 13)
+		{
+			model = 10 - (residentCarModels[0] + residentCarModels[1] + residentCarModels[2]);
+
+			if (model < 1) 
+				model = 1;
+			else if(model > 4)
+				model = 4;
+		}
+
+		if (model != -1) 
+		{
+			offset = *(int *)(lump_ptr + model * 4);
+			mem = (u_char*)lump_ptr;
+#if USE_PC_FILESYSTEM
+			if (gContentOverride)
+			{
+				char* newDenting;
+				newDenting = LoadCustomCarDentingFromFile(NULL, model);
+				if (newDenting)
+				{
+					mem = (u_char*)newDenting;
+					offset = 0;
+				}
+			}
+#endif
+
+			memcpy((u_char*)gCarDamageZoneVerts[i], mem + offset, NUM_DAMAGE_ZONES * MAX_FILE_DAMAGE_ZONE_VERTS);
+			offset += NUM_DAMAGE_ZONES * MAX_FILE_DAMAGE_ZONE_VERTS;
+			
+			memcpy((u_char*)gHDCarDamageZonePolys[i], mem + offset, NUM_DAMAGE_ZONES * MAX_FILE_DAMAGE_ZONE_POLYS);
+			offset += NUM_DAMAGE_ZONES * MAX_FILE_DAMAGE_ZONE_POLYS;
+			
+			memcpy((u_char*)gHDCarDamageLevels[i], mem + offset, MAX_FILE_DAMAGE_LEVELS);
+		}
+	}
+}
+
+
+// [D] [T]
+void SetupSpecDenting(char *loadbuffer)
+{
+	int offset;
+
+#if USE_PC_FILESYSTEM
+	if (gContentOverride)
+	{
+		char* newDenting;
+		int model;
+		model = residentCarModels[SPECIAL_CAR_SLOT];
+
+		newDenting = LoadCustomCarDentingFromFile(NULL, model);
+		if (newDenting)
+			loadbuffer = newDenting;
+	}
+	
+#endif
+
+	// [A] this is better
+	memcpy((u_char*)gCarDamageZoneVerts[SPECIAL_CAR_SLOT], (u_char*)loadbuffer, NUM_DAMAGE_ZONES * MAX_FILE_DAMAGE_ZONE_VERTS);
+	offset = NUM_DAMAGE_ZONES * MAX_FILE_DAMAGE_ZONE_VERTS;
+
+	memcpy((u_char*)gHDCarDamageZonePolys[SPECIAL_CAR_SLOT], (u_char*)loadbuffer + offset, NUM_DAMAGE_ZONES * MAX_FILE_DAMAGE_ZONE_POLYS);
+	offset += NUM_DAMAGE_ZONES * MAX_FILE_DAMAGE_ZONE_POLYS;
+
+	memcpy((u_char*)gHDCarDamageLevels[SPECIAL_CAR_SLOT], (u_char*)loadbuffer + offset, MAX_FILE_DAMAGE_LEVELS);
+}
+
+// [D] [T]
+void LoadDenting(int level)
+{
+	LoadfileSeg(DentingFiles[level], (char*)_other_buffer, 0, 12727);
+	ProcessDentLump((char*)_other_buffer, 0);
+
+	// [A] the damage zones of the borrowed Driver 2 city list Driver 2 vertices and polygons: Driver 1 cars do not dent
+	if (IS_DRIVER1_CITY(GameLevel))
+	{
+		memset(gCarDamageZoneVerts, 0xFF, sizeof(gCarDamageZoneVerts));
+		memset(gHDCarDamageZonePolys, 0xFF, sizeof(gHDCarDamageZonePolys));
+		memset(gHDCarDamageLevels, 0, sizeof(gHDCarDamageLevels));
+	}
+}
+
+
+

@@ -1,0 +1,269 @@
+{
+  "date": "2026-10-16",
+  "method": "-city N -mission 50 -playercar M -lightson -camangle 3072 (side) / 2048 (rear) / 4096 (front), -shot 150; 87 shots (4 cities x models 0,1,2,8..11 (+12 in New York) x 3 views), cropped and combined per car. Lamp flares compared with the lamp housings on the body, wheels with the wheel arches. Table: sD1CarFixes in src_rebuild/Game/C/cosmetic.c (brakeDx / headDx in full size D1 units, positive = outward; Dy negative = up).",
+  "wheels": "All 29 cars: wheels sit in their arches, front and rear axle, no floating or sunken wheels. No change needed.",
+  "indicators": "Indicator lamps exist (frontInd/backInd, AddIndicatorLight, from the borrowed Driver 2 data). Checked with the test switch REDRIVER2_HAZARD=1 (hazard lights on the player car) on Miami 8/11, Frisco 8, LA 8, New York 8, Newcastle 1 and Training 8: positions plausible except Training 8 (shifted down: indBackDy 25, indFrontDy 55, applied).",
+  "cars": [
+    {
+      "city": "Miami",
+      "model": 0,
+      "name": "cop",
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "Miami",
+      "model": 1,
+      "name": "civilian 1",
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "Miami",
+      "model": 2,
+      "name": "civilian 2",
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "Miami",
+      "model": 8,
+      "lamps": "two tail lamps per side, only the inner one lit",
+      "wheels": "ok",
+      "fix": "tailPair 2, brakeDx 0 -> 22",
+      "applied": true
+    },
+    {
+      "city": "Miami",
+      "model": 9,
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "Miami",
+      "model": 10,
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "Miami",
+      "model": 11,
+      "lamps": "two tail lamps per side, only one lit",
+      "wheels": "ok",
+      "fix": "tailPair 1, brakeDx -29 -> -33",
+      "applied": true
+    },
+    {
+      "city": "Frisco",
+      "model": 0,
+      "name": "cop",
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "Frisco",
+      "model": 1,
+      "name": "civilian 1",
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "Frisco",
+      "model": 2,
+      "name": "civilian 2",
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "Frisco",
+      "model": 8,
+      "lamps": "head lamp flares sat about 50 px inside the lamp housings and 45 px too low",
+      "wheels": "ok",
+      "fix": {
+        "headDx": "0 -> 55",
+        "headDy": "12 -> -43"
+      },
+      "applied": true,
+      "verified": "front shot: flares on the housings"
+    },
+    {
+      "city": "Frisco",
+      "model": 9,
+      "name": "taxi",
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "Frisco",
+      "model": 10,
+      "name": "pickup",
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "Frisco",
+      "model": 11,
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "LA",
+      "model": 0,
+      "name": "cop",
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "LA",
+      "model": 1,
+      "name": "civilian 1",
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "LA",
+      "model": 2,
+      "name": "civilian 2",
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "LA",
+      "model": 8,
+      "lamps": "tail lamp flares sat about 40 px inside the body corners",
+      "wheels": "ok",
+      "fix": {
+        "brakeDx": "0 -> 75"
+      },
+      "applied": true,
+      "verified": "rear shot: flares at the body corners"
+    },
+    {
+      "city": "LA",
+      "model": 9,
+      "lamps": "head lamp flares about 15 px inside the housings",
+      "wheels": "ok",
+      "fix": {
+        "headDx": "0 -> 20"
+      },
+      "applied": true,
+      "verified": "not re-shot"
+    },
+    {
+      "city": "LA",
+      "model": 10,
+      "name": "police",
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "LA",
+      "model": 11,
+      "lamps": "two tail lamps per side, only one lit",
+      "wheels": "ok",
+      "fix": "tailPair 1, brakeDx 0 -> 20",
+      "applied": true
+    },
+    {
+      "city": "New York",
+      "model": 0,
+      "name": "cop",
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "New York",
+      "model": 1,
+      "name": "civilian 1",
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "New York",
+      "model": 2,
+      "name": "taxi",
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "New York",
+      "model": 8,
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "New York",
+      "model": 9,
+      "name": "taxi",
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "New York",
+      "model": 10,
+      "name": "police",
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "New York",
+      "model": 11,
+      "lamps": "ok",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "New York",
+      "model": 12,
+      "lamps": "ok (double head lamps on both sides)",
+      "wheels": "ok",
+      "fix": null
+    },
+    {
+      "city": "Newcastle",
+      "model": 1,
+      "lamps": "no light texture: lean glow; flares below the lamps; wheels 38 px off at the front axle",
+      "wheels": "fixed",
+      "fix": "lean light texture, brakeDy -35, headDy -28, single head lamps, wheels fitted to the arches (wheelPercent 105)",
+      "applied": true
+    },
+    {
+      "city": "Newcastle",
+      "model": 2,
+      "lamps": "same as model 1",
+      "wheels": "fixed",
+      "fix": "brakeDy -60, headDy -18, single head lamps, wheels fitted to the arches",
+      "applied": true
+    },
+    {
+      "city": "Training",
+      "model": 8,
+      "lamps": "four tail lamps lit as a pair per side, flares too high",
+      "wheels": "ok",
+      "fix": "tailPair 2, brakeDx 22, brakeDy 62, headDx 50, headDy -31, single head lamps",
+      "applied": true
+    }
+  ],
+  "training_9": "Training has only one player car (model 8): -playercar 9 does not exist there. Nothing to fix."
+}
