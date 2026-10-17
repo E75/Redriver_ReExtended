@@ -4114,7 +4114,18 @@ int Driver1DlcScreen(int bSetup)
 		if (!gD1DlcChecked)
 			strcpy(checkName, "Check Driver 1 Data");
 		else if (gD1DlcCityMask && !gD1DlcPrepared)
-			strcpy(checkName, "Update Needed - Convert Again");
+		{
+			// the converter borrows Chicago from the extracted Driver 2 files: without them the conversion cannot succeed
+			FILE* donor = fopen("DRIVER2\\LEVELS\\CHICAGO.LEV", "rb");
+
+			if (donor)
+			{
+				fclose(donor);
+				strcpy(checkName, "Update Needed - Convert Again");
+			}
+			else
+				strcpy(checkName, "Driver 2 LEVELS Folder Missing");
+		}
 		else if (gD1DlcCityMask)
 		{
 			int found = 0;

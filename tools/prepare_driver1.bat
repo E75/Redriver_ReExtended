@@ -8,7 +8,7 @@ setlocal
 cd /d "%~dp0"
 
 if not exist "DRIVER2\LEVELS\CHICAGO.LEV" (
-    echo DRIVER2\LEVELS\CHICAGO.LEV not found: the Driver 2 folder must be next to this file.
+    echo DRIVER2\LEVELS\CHICAGO.LEV not found: copy the files of the DRIVER2 folder of your Driver 2 disc 1 (LEVELS, DATA, ...) into the DRIVER2 folder next to this file.
     goto failed
 )
 

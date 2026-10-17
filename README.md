@@ -59,14 +59,17 @@ Use the free camera (right stick or mouse) or `-camangle <n>` for side and rear 
 
 ### 1. Get the game
 
-Either download a build from the Releases page (if there is one) or build it yourself (see below). You get `REDRIVER2_dev.exe` and a few DLLs (`SDL2.dll`, `OpenAL32.dll`).
+Download the zip from the [Releases page](https://github.com/E75/Redriver_ReExtended/releases) and unzip it (or build it yourself, see below). You get `REDRIVER2_dev.exe`, `SDL2.dll`, `OpenAL32.dll`, `config.ini` and the folders `DRIVER2` and `install`.
 
 ### 2. Driver 2 files (required)
 
-1. Make a game folder and put the exe and the two DLLs (`SDL2.dll`, `OpenAL32.dll`, see Building below) in it.
-2. Copy the contents of the `data` folder of this repository into it (`config.ini`, `DRIVER2\`, `install\`).
-3. Put your Driver 2 CD images next to the install folder as `install\Driver2CD1.bin` and `install\Driver2CD2.bin` (the game reads them directly; the path is `[cdfs] image=` in `config.ini`). Videos and music are converted once with `_convert_cd_fmv_xa.bat` (needs Java; it uses the included jpsxdec).
-4. Start `REDRIVER2_dev.exe`. The detailed original instructions are in the [upstream wiki](https://github.com/OpenDriver2/REDRIVER2/wiki/Installation-instructions).
+The game needs the files of your own Driver 2 discs **extracted on disk**, not only the disc image. The `DRIVER2` folder of the zip only holds the extras of this project (fonts, language files, ...); the levels are not in it.
+
+1. Copy the contents of the `DRIVER2` folder of your Driver 2 disc 1 (`LEVELS`, `DATA`, `MISSIONS`, `SOUND`, ... all of it) into the `DRIVER2` folder next to the exe. Do the same for disc 2 if it has folders that disc 1 lacks (for example `NLEVELS`, the night levels).
+2. When Windows asks about files that already exist (`DATA`, `GFX`, `LANG`), **keep the files of the zip**: they are newer.
+3. Check that `DRIVER2\LEVELS\CHICAGO.LEV` exists. Without it nothing works, and `prepare_driver1.bat` stops with "CHICAGO.LEV not found".
+4. Optional, for videos and music: put the disc images as `install\Driver2CD1.bin` and `install\Driver2CD2.bin` (`[cdfs] image=` in `config.ini`) and run `_convert_cd_fmv_xa.bat` once (needs Java; it uses the included jpsxdec). Without it the game runs without videos (`-nofmv`).
+5. Start `REDRIVER2_dev.exe`. The detailed original instructions are in the [upstream wiki](https://github.com/OpenDriver2/REDRIVER2/wiki/Installation-instructions).
 
 ### 3. Driver 1 cities (optional)
 

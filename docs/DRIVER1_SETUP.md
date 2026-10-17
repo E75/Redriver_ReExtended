@@ -5,7 +5,7 @@ at runtime from your own Driver 1 files into `DRIVER1\CONVERTED\`. Nothing deriv
 
 ## What you need
 
-- the game (`REDRIVER2.exe`) with your own Driver 2 data in `DRIVER2\` (as for the normal game)
+- the game (`REDRIVER2.exe`) with your own Driver 2 data extracted into `DRIVER2\` (as for the normal game): the files of the `DRIVER2` folder of your Driver 2 disc 1, so that `DRIVER2\LEVELS\CHICAGO.LEV` exists. The converter reads Chicago from it. The disc image alone is not enough.
 - the `LEVELS` and `DATA` folders of your Driver 1 disc in a folder `DRIVER1\` next to the exe
 
 ```
