@@ -69,12 +69,15 @@ void InitialiseDenting(void)
 // the offsets). Hit points are in model space (x right, y down, z along the nose), every car has its own offsets.
 static SVECTOR gDentOffset[MAX_CARS][MAX_DENTING_VERTS];
 static unsigned char gDentDirty[MAX_CARS];
+static short gWheelStress[MAX_CARS][4];		// hits taken near each wheel; a wheel that took enough comes off
 static unsigned char gWheelLost[MAX_CARS];		// bit per wheel (physics order: 0 and 2 front, 1 and 3 rear) that was torn off
 
-int gImpactDents = 1;							// option Impact Dents (Extended Settings), on by default: dents and lost wheels
+int gImpactDents = 2;							// option Impact Dents (Extended Settings): 0 Off, 1 Sensitive, 2 Less Sensitive (default); dents and lost wheels
 
 #define DENT_WHEEL_DAMAGE	99		// percent of the damage bar from which a hard hit at a wheel tears it off
 #define DENT_WHEEL_MIN_HIT	300		// damage value of that hit
+#define DENT_WHEEL_STRESS	3000	// hits taken near one wheel (sum of the damage values) after which it hangs loose and comes off
+#define DENT_WHEEL_STRESS_DAMAGE	40	// percent of the damage bar the car needs for that
 #define DENT_WHEEL_REACH	210		// how close (units, Driver 2 sized car) the hit must be to the wheel
 
 int WheelIsLost(CAR_DATA* cp, int wheel)
@@ -90,8 +93,8 @@ static void MaybeLoseWheel(CAR_DATA* cp, int hx, int hz, int value, int scale)
 	int i;
 	long long reach2 = (long long)(DENT_WHEEL_REACH * scale >> 12) * (DENT_WHEEL_REACH * scale >> 12);
 
-	if (cp->totalDamage * 100 < MaxPlayerDamage[0] * DENT_WHEEL_DAMAGE || value < DENT_WHEEL_MIN_HIT || (Random2(0) & 3) == 0)
-		return;
+	int nearlyWrecked = cp->totalDamage * 100 >= MaxPlayerDamage[0] * DENT_WHEEL_DAMAGE && value >= DENT_WHEEL_MIN_HIT && (Random2(0) & 3) != 0;
+	int damaged = cp->totalDamage * 100 >= MaxPlayerDamage[0] * DENT_WHEEL_STRESS_DAMAGE;
 
 	// every wheel within reach of the hit goes (a corner hit one wheel, a hit in the middle of the front or rear both)
 	for (i = 0; i < 4; i++)
@@ -100,6 +103,9 @@ static void MaybeLoseWheel(CAR_DATA* cp, int hx, int hz, int value, int scale)
 		long long dx = hx + wheelDisp[i].vx, dz = hz + wheelDisp[i].vz, d2 = dx * dx + dz * dz;
 
 		if (!WheelIsLost(cp, i) && d2 < reach2)
+			gWheelStress[cp->id][i] = MIN(gWheelStress[cp->id][i] + value, 30000);
+
+		if (!WheelIsLost(cp, i) && d2 < reach2 && (nearlyWrecked || (damaged && gWheelStress[cp->id][i] >= DENT_WHEEL_STRESS)))
 		{
 			gWheelLost[cp->id] |= 1 << i;
 			gDentDirty[cp->id] = 1;
@@ -109,7 +115,9 @@ static void MaybeLoseWheel(CAR_DATA* cp, int hx, int hz, int value, int scale)
 
 #define DENT_OFFSET(cp, vi, axis)	(gDentOffset[(cp)->id][vi].axis)
 
-#define DENT_DEPTH_DIV		16		// damage value / this = depth of a dent for a Driver 2 sized car
+#define DENT_MIN_VALUE		250		// Less Sensitive: a hit below this damage value leaves no dent
+#define DENT_DEPTH_DIV_SENSITIVE	16	// Sensitive: every hit dents, (damage value) / this
+#define DENT_DEPTH_DIV		24		// (damage value - minimum) / this = depth of a dent for a Driver 2 sized car
 #define DENT_MAX_DEPTH		85
 #define DENT_RADIUS_MIN		90
 #define DENT_MAX_TOTAL		110		// no vertex moves farther than this in all dents together
@@ -136,7 +144,7 @@ void ImpactDent(CAR_DATA* cp, int hx, int hy, int hz, int value)
 
 	// sizes are for a Driver 2 car (half length 375), longer cars dent over a larger area
 	scale = cos->colBox.vz * 4096 / 375;
-	depth = MIN(value / DENT_DEPTH_DIV, DENT_MAX_DEPTH) * scale >> 12;
+	depth = MIN(MAX(value - (gImpactDents == 1 ? 0 : DENT_MIN_VALUE), 0) / (gImpactDents == 1 ? DENT_DEPTH_DIV_SENSITIVE : DENT_DEPTH_DIV), DENT_MAX_DEPTH) * scale >> 12;
 	radius = (DENT_RADIUS_MIN + value / 16) * scale >> 12;
 	maxTotal = DENT_MAX_TOTAL * scale >> 12;
 
@@ -259,6 +267,7 @@ void ResetImpactDents(int carId)
 	{
 		memset(gDentOffset[carId], 0, sizeof(gDentOffset[carId]));
 		gWheelLost[carId] = 0;
+		memset(gWheelStress[carId], 0, sizeof(gWheelStress[carId]));
 		gDentDirty[carId] = 0;
 	}
 }

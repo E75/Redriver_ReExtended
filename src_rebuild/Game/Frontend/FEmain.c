@@ -4076,9 +4076,9 @@ int ImpactDentsScreen(int bSetup)
 {
 	if (bSetup)
 	{
-		static char* names[2] = { "Off", "On" };
+		static char* names[3] = { "Off", "Sensitive", "Less Sensitive" };
 
-		BuildOptionButtons(2, names, FEVAR_DENTS, gImpactDents);
+		BuildOptionButtons(3, names, FEVAR_DENTS, gImpactDents);
 		return 1;
 	}
 

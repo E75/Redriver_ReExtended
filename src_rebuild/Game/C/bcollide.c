@@ -487,7 +487,7 @@ int DamageCar3D(CAR_DATA *cp, LONGVECTOR4* delta, int strikeVel, CAR_DATA *pOthe
 		int ly = FIXEDH(cp->hd.where.m[0][1] * (*delta)[0] + cp->hd.where.m[1][1] * (*delta)[1] + cp->hd.where.m[2][1] * (*delta)[2]);
 		int lz = FIXEDH(cp->hd.where.m[0][2] * (*delta)[0] + cp->hd.where.m[1][2] * (*delta)[1] + cp->hd.where.m[2][2] * (*delta)[2]);
 
-		ImpactDent(cp, cp->ap.carCos->cog.vx - lx, ly + cp->ap.carCos->cog.vy, cp->ap.carCos->cog.vz - lz, value);
+		ImpactDent(cp, cp->ap.carCos->cog.vx - lx, ly + cp->ap.carCos->cog.vy, cp->ap.carCos->cog.vz - lz, value > 0 ? MIN((strikeVel / 350 + 512) * 3 >> 3, 1143) : 0);
 	}
 #endif
 

@@ -466,7 +466,7 @@ int SaveConfigData(char* buffer)
 	header->reserved[4] = gDrawDistanceMode + 1;	// 0 (never saved) is 5x, the default
 	header->reserved[3] = (gCrowdMul == 10) ? 5 : (gCrowdMul == 5) ? 2 : (gCrowdMul == 3) ? 4 : (gCrowdMul == 1) ? 3 : 1;	// 0 (never saved) is 3x, the default
 	header->reserved[2] = gCameraZoom;	// 0 (never saved) is 1.0, the default
-	header->reserved[1] = gAllCityCars | (gDayCycle << 4) | ((gSunShafts ? 2 : 1) << 5) | ((gVolumeLights ? 2 : 1) << 7) | ((gAtmosphere ? 2 : 1) << 9) | (gD1DlcEnabled << 11) | ((gImpactDents ? 2 : 1) << 12);	// 0 (never saved) is off for both, sun shafts, lamps and fog keep config.ini
+	header->reserved[1] = gAllCityCars | (gDayCycle << 4) | ((gSunShafts ? 2 : 1) << 5) | ((gVolumeLights ? 2 : 1) << 7) | ((gAtmosphere ? 2 : 1) << 9) | (gD1DlcEnabled << 11) | ((gImpactDents + 1) << 12);	// 0 (never saved) is off for both, sun shafts, lamps and fog keep config.ini
 	header->reserved[0] = gSkyHd + 1;	// 0 (never saved) keeps the default, HD
 #endif
 
@@ -508,7 +508,7 @@ int LoadConfigData(char* buffer)
 	gCameraZoom = (header->reserved[2] >= 0 && header->reserved[2] <= 4) ? header->reserved[2] : 0;
 	gAllCityCars = (header->reserved[1] & 1);
 	if ((header->reserved[1] >> 12) & 3)
-		gImpactDents = ((header->reserved[1] >> 12) & 3) == 2;	// 0 (never saved) stays on
+		gImpactDents = ((header->reserved[1] >> 12) & 3) - 1;	// 0 (never saved) stays Less Sensitive
 	gDayCycle = (header->reserved[1] >> 4) & 1;
 	if ((header->reserved[1] >> 5) & 3)
 		gSunShafts = ((header->reserved[1] >> 5) & 3) == 2;
