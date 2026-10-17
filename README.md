@@ -116,9 +116,7 @@ Pause (Esc / Start) > **Debug Options** has extra options, most of them new:
 
 ![Fun Cheats in the debug menu](docs/images/debug_menu.jpg)
 
-- **Display position**: shows X, Y, Z of the player (useful for bug reports).
-- **Back on Wheels**, **Invincibility**, **Immunity**, **Puppy Dog Cops**, **Player Ghost**, **Toggle Overlay**, **Next Mission**.
-- **Time of Day**: Day, Night, Dusk, Dawn and Clear, Rain, Snow, Fog.
+- **Time of Day**: Day, Night, Dusk, Dawn and Clear, Rain, **Snow**, **Fog**.
 - **Fun Cheats**: Secret Car Fun, Jericho Mode, **Flying Car** (F8), **Infinite Mass** (F6, the car is not pushed by other cars), **Speed Boost Horn** (hold the horn to push the car forward, fun together with Infinite Mass) and **Chopper** (fly the helicopter).
 - **Map Editor** (F4): see above.
 
