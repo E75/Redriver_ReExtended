@@ -1050,7 +1050,15 @@ void PlaceCameraInCar(PLAYER *lp, int BumperCam)
 
 	// [A] a car that was removed has no cosmetics: look from the head position instead of crashing
 	if (cp && cp->ap.carCos == NULL)
+	{
+		static int warned = -1;
+
+		if (warned != lp->cameraCarId)
+			printWarning("in-car camera: car %d has no cosmetics (model %d, control type %d)\n", lp->cameraCarId, cp->ap.model, cp->controlType);
+
+		warned = lp->cameraCarId;
 		cp = NULL;
+	}
 
 	viewer_position.vx = 0;
 	viewer_position.vy = 0;
