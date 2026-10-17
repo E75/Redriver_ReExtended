@@ -24,6 +24,7 @@
 #include "shadow.h"
 #include "players.h"
 #include "chopper.h"
+#include "playermodel.h"
 
 struct BOUND_BOX
 {
@@ -1151,8 +1152,7 @@ void ProcessCarPad(CAR_DATA* cp, u_int pad, char PadSteer, char use_analogue)
 			{
 				if (player[player_id].dying == 0)
 				{
-					if (ActiveCheats.cheat12 && (GameLevel == 1 || GameLevel == 2))		// [A] play as Jericho cheat
-						whoExit = OTHER_MODEL;
+					whoExit = (PED_MODEL_TYPES)PlayerExitModel();		// [A] Jericho cheat and the debug menu player model
 
 					ActivatePlayerPedestrian(cp, NULL, 0, NULL, whoExit);
 				}

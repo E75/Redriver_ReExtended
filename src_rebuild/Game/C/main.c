@@ -23,6 +23,7 @@
 #include "pres.h"
 #include "draw.h"
 #include "denting.h"
+#include "playermodel.h"
 #include "cosmetic.h"
 #include "pedest.h"
 #include "spool.h"
@@ -1043,6 +1044,15 @@ void StepSim(void)
 					t0 |= CAR_PAD_LEAVECAR;
 				}
 
+#if defined(DEBUG_OPTIONS) && !defined(PSX)
+				if (getenv("REDRIVER2_AUTODRIVE"))
+				{
+					t0 |= ((FrameCnt / 600) % 4 == 3) ? CAR_PAD_BRAKE : CAR_PAD_ACCEL;
+					t1 = (int)(50.0 * sin(FrameCnt * 0.011));
+					t2 = 1;
+				}
+#endif
+
 				if (NoPlayerControl == 0)
 				{
 					if (gStopPadReads)
@@ -1722,6 +1732,52 @@ int gForceLightsOn = 0;		// -lightson: car lights on in daylight, to check where
 int gLampDamage = 0;		// -lampdamage <mask>: wreck the front lamps of the player car (bit 0 = left, bit 1 = right), to check that broken lamps stay dark
 #endif
 
+#if defined(DEBUG_OPTIONS) && !defined(PSX) && defined(_WIN32)
+// REDRIVER2_PERFLOG=<frames>: every that many frames one "perf:" line (average and worst frame time, memory of the process);
+// REDRIVER2_AUTODRIVE=1: the player car drives on its own (gas, weaving steering, reverse now and then), for long leak runs
+struct PerfProcessMemory { unsigned long cb, pageFaults; size_t peakWs, ws, a, b, c, d, pagefile, peakPagefile, privateUsage; };
+extern "C" __declspec(dllimport) void* __stdcall GetCurrentProcess(void);
+extern "C" __declspec(dllimport) int __stdcall K32GetProcessMemoryInfo(void*, PerfProcessMemory*, unsigned long);
+
+static void PerfLogFrame(void)
+{
+	static int interval = -1, count = 0;
+	static double sum = 0, worst = 0, last = 0, workWorst = 0, workSum = 0, lastWork = 0;
+	double now, dt;
+	PerfProcessMemory mem = { sizeof(mem) };
+
+	if (interval < 0)
+	{
+		const char* e = getenv("REDRIVER2_PERFLOG");
+		interval = e ? atoi(e) : 0;
+	}
+
+	if (interval <= 0 || FrameCnt <= 40)
+		return;
+
+	now = NowMs();
+	dt = now - last;
+	last = now;
+
+	if (dt > 1000.0)
+		return;
+
+	sum += dt;
+	worst = MAX(worst, dt);
+	workSum = gStepMs + gBuildMs + gSubmitMs;
+	workWorst = MAX(workWorst, workSum - lastWork);
+	lastWork = workSum;
+
+	if (++count < interval)
+		return;
+
+	K32GetProcessMemoryInfo(GetCurrentProcess(), &mem, sizeof(mem));
+	printInfo("perf: frame %d avg %.2f ms worst %.2f ms, work worst %.2f avg %.2f ms, player %d %d, working set %d MB, private %d MB\n", FrameCnt, sum / count, worst, workWorst, workSum / MAX(gTimedFrames, 1), player[0].pos[0], player[0].pos[2], (int)(mem.ws >> 20), (int)(mem.privateUsage >> 20));
+	count = 0;
+	sum = worst = workWorst = 0;
+}
+#endif
+
 // [D] [T]
 void DrawGame(void)
 {
@@ -1736,6 +1792,24 @@ void DrawGame(void)
 	{
 		car_data[MainPlayer.playerCarId].ap.damage[0] = (gLampDamage & 1) ? 1500 : 0;
 		car_data[MainPlayer.playerCarId].ap.damage[1] = (gLampDamage & 2) ? 1500 : 0;
+	}
+
+	// REDRIVER2_PLAYERMODEL=<0 Tanner, 1 Jericho, 2 pedestrian>: the player gets out as that model at step 40 (test of the player model switch)
+	if (getenv("REDRIVER2_PLAYERMODEL") && FrameCnt == 40 && MainPlayer.playerType == PLAYER_TYPE_CAR)
+	{
+		SetPlayerModel(atoi(getenv("REDRIVER2_PLAYERMODEL")), 17);
+		ActivatePlayerPedestrian(&car_data[MainPlayer.playerCarId], NULL, 0, NULL, (PED_MODEL_TYPES)PlayerExitModel());
+	}
+
+	// REDRIVER2_DENT=<zone mask>: damage those zones of the player car at step 40 and dent it (test of the damage zones)
+	if (getenv("REDRIVER2_DENT") && FrameCnt == 40 && MainPlayer.playerType == PLAYER_TYPE_CAR)
+	{
+		int z;
+
+		for (z = 0; z < 6; z++)
+			car_data[MainPlayer.playerCarId].ap.damage[z] = (atoi(getenv("REDRIVER2_DENT")) >> z & 1) ? 3500 : 0;
+
+		DentCar(&car_data[MainPlayer.playerCarId]);
 	}
 
 	if (gPedTest && FrameCnt == 30)
@@ -1800,6 +1874,10 @@ void DrawGame(void)
 		gSubmitMs += NowMs() - submitStart;
 		gTimedFrames++;
 	}
+#endif
+
+#if defined(DEBUG_OPTIONS) && !defined(PSX) && defined(_WIN32)
+	PerfLogFrame();
 #endif
 
 #if defined(DEBUG_OPTIONS) && !defined(PSX)

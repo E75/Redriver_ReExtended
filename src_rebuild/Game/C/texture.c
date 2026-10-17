@@ -513,16 +513,16 @@ static int specPagesSectors = 0;
 static XYPAIR specPageList[32];
 static int specPageCount = 0;
 
-// loads two pages from the special pages of a level file (src1/src2 = their page numbers, 'all' = the sectors that
+// loads one or two pages (src2 < 0: only src1) from the special pages of a level file (src1/src2 = their page numbers, 'all' = the sectors that
 // hold them in the order of 'list') into the special slot as pages dest1/dest2, with palettes
-int LoadSpecialSlotPages(char* all, const XYPAIR* list, int count, int src1, int src2, int dest1, int dest2)
+int LoadSpecialSlotPages(char* all, const XYPAIR* list, int count, int src1, int src2, int dest1, int dest2, int firstSlot)
 {
 	char* buffer;
 	int i, slot, loaded, palettes, capacity;
 	RECT16 pos, cl;
 
 	// the palette area of the slot is as big as the biggest special pair of the city, a Driver 1 city has two spare slots of 32
-	capacity = (nspecpages != 0) ? ((MaxSpecCluts + 3) & ~3) : 64;
+	capacity = (nspecpages != 0 && !IS_DRIVER1_CITY(GameLevel)) ? ((MaxSpecCluts + 3) & ~3) : 64;
 	palettes = 0;
 	buffer = all;
 
@@ -540,12 +540,15 @@ int LoadSpecialSlotPages(char* all, const XYPAIR* list, int count, int src1, int
 		return 0;
 	}
 
-	cl.x = slot_clutpos[specialSlot].vx;
-	cl.y = slot_clutpos[specialSlot].vy;
+	if (firstSlot < 0)
+		firstSlot = specialSlot;
+
+	cl.x = slot_clutpos[firstSlot].vx;
+	cl.y = slot_clutpos[firstSlot].vy;
 	cl.w = 16;
 	cl.h = 1;
 
-	slot = specialSlot;
+	slot = firstSlot;
 	loaded = 0;
 	buffer = all;
 
@@ -571,7 +574,7 @@ int LoadSpecialSlotPages(char* all, const XYPAIR* list, int count, int src1, int
 		buffer += (list[i].y + 2047) & -CDSECTOR_SIZE;
 	}
 
-	return loaded == 2;
+	return loaded == ((src2 >= 0) ? 2 : 1);
 }
 
 // loads the two pages of special car 'model' (8 and up) of this level into the special slot

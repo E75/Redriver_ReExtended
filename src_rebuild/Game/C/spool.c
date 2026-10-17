@@ -2201,6 +2201,9 @@ void Tada(void)
 		case SpecSpool_Cosmetics:
 			SetupSpecCosmetics(specLoadBuffer);
 			SetupSpecDenting(specLoadBuffer + sizeof(CAR_COSMETICS));
+
+			if (IS_DRIVER1_CITY(GameLevel))
+				D1BuildDamageZones(SPECIAL_CAR_SLOT);
 			break;
 		default:
 			printWarning("Tada: incorrect special state %d", specialState);

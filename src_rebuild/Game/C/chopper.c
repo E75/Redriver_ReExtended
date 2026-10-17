@@ -15,6 +15,7 @@
 #include "models.h"
 #include "system.h"
 #include "map.h"
+#include "jericho.h"
 
 #ifndef PSX
 
@@ -338,6 +339,7 @@ static int PrepareChopper(void)
 		}
 
 		pagesLoaded = 1;
+		JerichoPageLost();
 	}
 
 	if (!InitChopperModel())
@@ -590,6 +592,12 @@ int ChopperCanLeave(void)
 	return ChopperHeight() < CHOPPER_LEAVE_HEIGHT;
 }
 
+// Jericho took the special slot: the chopper pages have to be loaded again
+void ChopperPagesLost(void)
+{
+	pagesLoaded = 0;
+}
+
 int ChopperHidesCar(CAR_DATA* cp)
 {
 	return (gChopper && cp == PilotCar()) || (landedCar != NULL && cp == landedCar);
@@ -602,6 +610,7 @@ void ChopperToggle(int direction) {}
 void ChopperStep(void) {}
 void ChopperDrawShadow(void) {}
 int ChopperHidesCar(CAR_DATA* cp) { return 0; }
+void ChopperPagesLost(void) {}
 int ChopperHeight(void) { return 0; }
 int ChopperCanLeave(void) { return 1; }
 

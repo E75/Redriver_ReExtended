@@ -3,6 +3,7 @@
 
 
 extern void InitialiseDenting(); // 0x0003B1C0
+extern void D1BuildDamageZones(int slot);
 extern void LoadDenting(int level); // 0x0003B1F0
 
 extern void DentCar(CAR_DATA *cp); // 0x0003A310
