@@ -61,6 +61,7 @@
 #include "state.h"
 #include "cutrecorder.h"
 #include "chopper.h"
+#include "carspawner.h"
 
 int levelstartpos[8][4] = {
 	{ 4785, -1024, -223340, 0},
@@ -1540,6 +1541,12 @@ void CheckForPause(void)
 	// check pads for pause here
 	if (AttractMode == 0 && pauseflag == 0)
 	{
+#ifndef PSX
+		// [A] Car Spawner showroom: left / right change the car, Enter ends the mode instead of pausing
+		if (CarSpawnerUpdate(paddp))
+			return;
+#endif
+
 		if (FrameCnt > 2)
 		{
 			if (NumPlayers == 1)
@@ -2421,6 +2428,13 @@ int redriver2_main(int argc, char** argv)
 			extern int gD1WheelPercent;
 			gD1WheelPercent = atoi(argv[i + 1]);
 			i++;
+		}
+		else if (!strcmp(argv[i], "-carspawner") && argc - i >= 2)
+		{
+			int mode = argc - i >= 3 ? (!strcmp(argv[i + 2], "autoright") ? 1 : !strcmp(argv[i + 2], "autostart") ? 2 : 0) : 0;
+
+			CarSpawnerCommandLine(atoi(argv[i + 1]), mode);
+			i += 1 + (mode != 0);
 		}
 		else if (!strcmp(argv[i], "-playercar"))
 		{

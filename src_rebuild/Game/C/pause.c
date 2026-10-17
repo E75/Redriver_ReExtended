@@ -1,5 +1,6 @@
 #include "driver2.h"
 #include "pause.h"
+#include "carspawner.h"
 #include "system.h"
 #include "mission.h"
 #include "overlay.h"
@@ -211,6 +212,13 @@ void ToggleMapEditor(int direction)
 	PauseReturnValue = MENU_QUIT_CONTINUE;
 }
 
+// [A] Car Spawner: a showroom car next to the player on the road, one entry for the loaded city (carspawner.c)
+void ToggleCarSpawner(int direction)
+{
+	CarSpawnerStart();
+	PauseReturnValue = MENU_QUIT_CONTINUE;
+}
+
 void ToggleChopper(int direction)
 {
 	ChopperToggle(direction);
@@ -348,6 +356,7 @@ MENU_ITEM DebugOptionsItems[] =
 	{ "Toggle Overlay",	PAUSE_TYPE_FUNC,	2,  ToggleOverlays,		MENU_QUIT_NONE,		NULL },
 	{ "Player Ghost", 	PAUSE_TYPE_FUNC, 	2,  TogglePlayerGhost,	MENU_QUIT_NONE,		NULL },
 	{ "Map Editor",		PAUSE_TYPE_FUNC,	2,  ToggleMapEditor,	MENU_QUIT_NONE,		NULL },
+	{ "Car Spawner",	PAUSE_TYPE_FUNC,	2,  ToggleCarSpawner,	MENU_QUIT_NONE,		NULL },
 	{ "Next Mission",	0, 					2,  NULL,				MENU_QUIT_NEXTMISSION, 	NULL },
 	{ NULL, PAUSE_TYPE_ENDITEMS, 0u, NULL, MENU_QUIT_NONE, NULL }
 };

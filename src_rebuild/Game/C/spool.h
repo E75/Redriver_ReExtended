@@ -70,6 +70,7 @@ extern void InitSpecSpool(); // 0x0007D6D8
 extern void InitCdIcon();
 
 extern void CheckSpecialSpool(); // 0x0007D4E0
+extern void ResumeSpecialSpool();	// [A] Car Spawner
 extern void AbortSpecialSpool();	// [A] chopper cheat
 extern void QuickSpoolSpecial(); // 0x0007E84C
 

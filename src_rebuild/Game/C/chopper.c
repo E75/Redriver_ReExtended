@@ -77,6 +77,12 @@ static CAR_DATA* PilotCar(void)
 
 static int pagesLoaded = 0;		// the chopper texture pages are in the special slot
 
+// Car Spawner put another car into the special slot: the chopper pages are gone
+void ChopperSlotTaken(void)
+{
+	pagesLoaded = 0;
+}
+
 // level loaded: Rio Take A Ride starts with the chopper pages (SetupResidentModels), everything else without
 void ChopperLevelLoaded(void)
 {

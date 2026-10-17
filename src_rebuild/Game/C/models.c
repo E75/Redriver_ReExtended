@@ -13,6 +13,7 @@ MODEL dummyModel = { 0 };
 
 char* modelname_buffer = NULL;
 char *car_models_lump = NULL;
+int gSpecMemReq = 0;	// memory of the special car slot (ProcessCarModelLump), Car Spawner checks a car against it
 
 MODEL* modelpointers[MAX_MODEL_SLOTS];
 MODEL* pLodModels[MAX_MODEL_SLOTS];
@@ -403,12 +404,87 @@ int ProcessCarModelLump(char *lump_ptr, int lump_size)
 	}
 #endif
 
+	gSpecMemReq = specMemReq;
 	mallocptr = specmallocptr + specMemReq;
 	specLoadBuffer = specmallocptr + specMemReq - 2048;
 	D_MALLOC_END();
 
 	return 0;
 }
+
+#ifndef PSX
+extern char* specmallocptr;
+
+// [A] Car Spawner: puts car model 'model_number' (0..12) of the car models lump into the special car slot, like
+// ProcessCarModelLump does at the level load but into the memory of the special slot. 0 when it does not fit.
+int LoadCarModelIntoSpecialSlot(int model_number)
+{
+	int* offsets;
+	char* models_offset;
+	char* mem;
+	MODEL* model;
+	volatile char* savedMalloc;
+	int cleanOfs, damOfs, lowOfs, need;
+
+	if (!car_models_lump || model_number < 0 || model_number > 12)
+		return 0;
+
+	offsets = (int*)(car_models_lump + 4 + model_number * sizeof(int) * 3);
+	models_offset = car_models_lump + 4 + 160;
+	cleanOfs = offsets[0];
+	damOfs = offsets[1];
+	lowOfs = offsets[2];
+
+	if (cleanOfs == -1)
+		return 0;
+
+	need = ((MODEL*)(models_offset + cleanOfs))->poly_block;
+
+	if (damOfs != -1)
+		need += ((MODEL*)(models_offset + damOfs))->normals;
+
+	if (lowOfs != -1)
+		need += ((MODEL*)(models_offset + lowOfs))->poly_block;
+
+	need += 4096;
+
+	if (need > gSpecMemReq)
+	{
+		printWarning("Car model %d needs %d bytes, the special car slot has %d\n", model_number, need, gSpecMemReq);
+		return 0;
+	}
+
+	gCarCleanModelPtr[SPECIAL_CAR_SLOT] = NULL;
+	gCarDamModelPtr[SPECIAL_CAR_SLOT] = NULL;
+	gCarLowModelPtr[SPECIAL_CAR_SLOT] = NULL;
+
+	savedMalloc = mallocptr;
+	mallocptr = specmallocptr;
+	whichCP = baseSpecCP;
+
+	mem = models_offset + cleanOfs;
+	model = GetCarModel(mem, (char**)&mallocptr, 1);
+	gCarCleanModelPtr[SPECIAL_CAR_SLOT] = model;
+	buildNewCarFromModel(SPECIAL_CAR_SLOT, 1, mem, model);
+
+	if (damOfs != -1)
+	{
+		mem = models_offset + damOfs;
+		gCarDamModelPtr[SPECIAL_CAR_SLOT] = GetCarModel(mem, (char**)&mallocptr, 0);
+	}
+
+	if (lowOfs != -1)
+	{
+		mem = models_offset + lowOfs;
+		model = GetCarModel(mem, (char**)&mallocptr, 1);
+		gCarLowModelPtr[SPECIAL_CAR_SLOT] = model;
+		buildNewCarFromModel(SPECIAL_CAR_SLOT, 0, mem, model);
+	}
+
+	mallocptr = savedMalloc;
+	return 1;
+}
+#endif // !PSX
 
 // [D] [T]
 MODEL* FindModelPtrWithName(char *name)

@@ -11,6 +11,7 @@ extern void SetupSpecCosmetics(char *loadbuffer); // 0x00031360
 
 // [A] Driver 1 cities: scales the Driver 2 cosmetics of the resident cars to the size of the Driver 1 car models
 extern void D1ScaleCarCosmetics(void);
+extern int D1PrepareSpecialSlotCosmetics(int model);
 
 // [A] where a Driver 1 player car's wheels are drawn (the physics keeps car_cosmetics), valid when the flag of the slot is set
 extern SVECTOR gD1WheelVisual[MAX_CAR_RESIDENT_MODELS][4];

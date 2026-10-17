@@ -397,11 +397,10 @@ static int D1PickDonor(int rawMaxZ, CAR_COSMETICS* out)
 	return 1;
 }
 
-void D1ScaleCarCosmetics(void)
+static void D1ScaleCarCosmeticsSlot(int i)
 {
-	int i, j, v;
+	int j, v;
 
-	for (i = 0; i < MAX_CAR_RESIDENT_MODELS; i++)
 	{
 		MODEL* model = gCarCleanModelPtr[i];
 		CAR_COSMETICS* cos = &car_cosmetics[i];
@@ -417,7 +416,7 @@ void D1ScaleCarCosmetics(void)
 		int lower, wheelPercent;
 
 		if (model == NULL || model->num_vertices == 0 || cos->colBox.vx <= 0 || cos->colBox.vy <= 0 || cos->colBox.vz <= 0)
-			continue;
+			return;
 
 		verts = GET_MODEL_DATA(SVECTOR, model, vertices);
 
@@ -622,6 +621,27 @@ void D1ScaleCarCosmetics(void)
 			cos->cog = physics.cog;
 		}
 	}
+}
+
+void D1ScaleCarCosmetics(void)
+{
+	int i;
+
+	for (i = 0; i < MAX_CAR_RESIDENT_MODELS; i++)
+		D1ScaleCarCosmeticsSlot(i);
+}
+
+// [A] Car Spawner: the special slot got another model (models.c LoadCarModelIntoSpecialSlot). Its cosmetics start from the
+// borrowed ones again and are scaled like at the level load; the models are fresh copies, so they are not scaled twice.
+int D1PrepareSpecialSlotCosmetics(int model)
+{
+	if (model < 1 || model >= D1_DONOR_MODELS || !sD1DonorValid[model])
+		return 0;
+
+	car_cosmetics[SPECIAL_CAR_SLOT] = sD1Donors[model];
+	gD1WheelVisualOn[SPECIAL_CAR_SLOT] = 0;
+	D1ScaleCarCosmeticsSlot(SPECIAL_CAR_SLOT);
+	return 1;
 }
 
 #define REVERSELIGHT_SIZE		14

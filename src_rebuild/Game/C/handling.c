@@ -1,5 +1,6 @@
 ﻿#include "driver2.h"
 #include "handling.h"
+#include "carspawner.h"
 #include "cosmetic.h"
 #include "mission.h"
 #include "dr2roads.h"
@@ -1144,7 +1145,7 @@ void ProcessCarPad(CAR_DATA* cp, u_int pad, char PadSteer, char use_analogue)
 	if (cp->controlType == CONTROL_TYPE_PLAYER)
 	{
 		// handle car leaving
-		if ((pad & CAR_PAD_LEAVECAR) == CAR_PAD_LEAVECAR && player_id > -1)
+		if ((pad & CAR_PAD_LEAVECAR) == CAR_PAD_LEAVECAR && player_id > -1 && gCarSpawner != 1)
 		{
 			if (!TannerStuckInCar(1, player_id) && ChopperCanLeave())
 			{

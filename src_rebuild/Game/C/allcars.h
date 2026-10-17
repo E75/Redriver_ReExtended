@@ -10,6 +10,8 @@
 extern int gAllCityCars;			// option: 0 = original cars of the city
 extern int gForeignSpool;			// the special spool under way reads the foreign block
 extern int gForeignLoaded;			// the foreign car was spooled (once per level)
+int ForeignCarSelect(int city, int special);	// Car Spawner: live special car of another Driver 2 city (spool it with QuickSpoolSpecial)
+void ForeignCarClear(void);
 extern int gForeignForceCity;		// -foreigncar <city> <special 1..4>: test option, -1 = random
 extern int gForeignForceSpecial;
 
