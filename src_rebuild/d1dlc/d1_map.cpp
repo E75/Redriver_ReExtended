@@ -1300,6 +1300,7 @@ bool D1Dlc_ConvertMap(const LevFile& d1, LevWriter& out, std::string& log)
 				std::vector<char> model(src + ofs + 4, src + ofs + 4 + size);
 				((MODEL*)model.data())->flags2 &= ~1;
 				LowerGrassModel(model.data(), size);
+				ClampBoxHeights(model);
 				kerbBoxes += RemoveKerbWallBoxes(model, std::string());	// spooled models carry no name here
 				roofs += kRoofCaps ? AddRoofCap(model) : 0;
 				Put<int>(block, (int)model.size());
