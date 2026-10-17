@@ -272,7 +272,7 @@ void ModifyCamera(void)
 
 			if (lp->cameraView == 1)
 			{
-				if (lp->cameraCarId < 1)
+				if (lp->cameraCarId < 1 || car_data[lp->cameraCarId].ap.carCos == NULL)
 					length = 360;
 				else
 					length = car_data[lp->cameraCarId].ap.carCos->colBox.vz;
