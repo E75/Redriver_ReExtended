@@ -55,7 +55,7 @@ Either download a build from the Releases page (if there is one) or build it you
 
 ### 2. Driver 2 files (required)
 
-1. Make a game folder and put the exe and the DLLs in it.
+1. Make a game folder and put the exe and the two DLLs (`SDL2.dll`, `OpenAL32.dll`, see Building below) in it.
 2. Copy the contents of the `data` folder of this repository into it (`config.ini`, `DRIVER2\`, `install\`).
 3. Put your Driver 2 CD images next to the install folder as `install\Driver2CD1.bin` and `install\Driver2CD2.bin` (the game reads them directly; the path is `[cdfs] image=` in `config.ini`). Videos and music are converted once with `_convert_cd_fmv_xa.bat` (needs Java; it uses the included jpsxdec).
 4. Start `REDRIVER2_dev.exe`. The detailed original instructions are in the [upstream wiki](https://github.com/OpenDriver2/REDRIVER2/wiki/Installation-instructions).
@@ -94,16 +94,17 @@ Needs Visual Studio 2022 or the Build Tools (v143 or newer), PowerShell and git.
 ```powershell
 git clone --recurse-submodules https://github.com/E75/Redriver_ReExtended.git
 cd Redriver_ReExtended
-.\windows_dev_prepare.ps1          # downloads premake, SDL2, OpenAL, libjpeg; the last "open .sln" step may report an error, that is harmless
-cd src_rebuild
-$env:SDL2_DIR = ".\dependencies\SDL2-2.30.2"
+.\windows_dev_prepare.ps1          # downloads premake, SDL2, OpenAL, libjpeg and generates the project; ends in src_rebuild. Its last "open .sln" step reports an error, that is harmless
+$env:SDL2_DIR = ".\dependencies\SDL2-2.30.2"      # only needed again when you start a new PowerShell window
 $env:OPENAL_DIR = ".\dependencies\openal-soft-1.23.1-bin"
 $env:JPEG_DIR = ".\dependencies\jpeg-9d"
-.\premake5.exe vs2022
+.\premake5.exe vs2022              # only needed again after adding source files
 MSBuild build\REDRIVER2.sln -p:Configuration=Release_dev -p:Platform=Win32 -m
 ```
 
-The exe is written to `src_rebuild\bin\Release_dev`. Only the 32 bit Windows build is tested.
+(`MSBuild` is in the "Developer PowerShell for VS"; with the Build Tools add `-p:PlatformToolset=v145` or the version you have installed.)
+
+The exe is written to `src_rebuild\bin\Release_dev`. The two DLLs it needs are not built: copy `src_rebuild\dependencies\SDL2-2.30.2\lib\x86\SDL2.dll` next to the exe, and `src_rebuild\dependencies\openal-soft-1.23.1-bin\bin\Win32\soft_oal.dll` as `OpenAL32.dll`. Only the 32 bit Windows build is tested.
 
 ## Credits
 

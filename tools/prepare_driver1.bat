@@ -25,7 +25,7 @@ if not exist "%GAME%" (
 )
 
 echo Converting the Driver 1 cities, this takes about a minute...
-"%GAME%" -nofmv -d1prepare
+"%~dp0%GAME%" -nofmv -d1prepare
 findstr /C:"Driver 1 prepare" REDRIVER2.log
 echo.
 echo Done. Start the game and open Options - Gameplay - Secret - Extended Settings - Driver 1 DLC if the cities are not on yet.
