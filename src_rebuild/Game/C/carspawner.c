@@ -34,6 +34,7 @@ extern char* DentingFiles[];
 extern char PingOutCivsOnly;
 extern int gCantDrive;
 extern int gCamAngleOverride;
+extern int gCameraAngle;
 extern int allowSpecSpooling;
 extern char* LevelNames[];
 extern int PolySizes[56];
@@ -389,7 +390,7 @@ done:
 }
 
 // makes 'model' of the car list a resident car; returns 0 when it cannot be loaded
-static int PrepareModel(const SPAWN_CAR* c)
+static int PrepareModelInner(const SPAWN_CAR* c)
 {
 	int i, model = c->model;
 
@@ -476,6 +477,23 @@ static int PrepareModel(const SPAWN_CAR* c)
 	slotCity = GameLevel;
 	slotModel = model;
 	return 1;
+}
+
+// Building a car of another city writes palette rows of the pedestrians and of the cop and civilian cars (its pages are
+// numbered differently here): the rows of the level are put back after every car, or the cop and civilian cars get wrong colours.
+static int PrepareModel(const SPAWN_CAR* c)
+{
+	static u_short civClutLevel[6][32][6];
+	static int civClutFrame = 0;
+	int ok;
+
+	if (civClutFrame == 0 || FrameCnt < civClutFrame)
+		memcpy(civClutLevel, civ_clut, sizeof(civClutLevel));
+
+	civClutFrame = FrameCnt;
+	ok = PrepareModelInner(c);
+	memcpy(civ_clut, civClutLevel, sizeof(civClutLevel));
+	return ok;
 }
 
 // the player's car becomes car spawnList[spawnIndex] on the spot
@@ -579,6 +597,7 @@ static void LeaveShowroom(void)
 	spawnExitBlock = FrameCnt + 25;
 	gCantDrive = 0;
 	gCamAngleOverride = 0;
+	gCameraAngle = 2048;	// back to the chase camera behind the car
 	Mission.message_timer[0] = 0;
 }
 
