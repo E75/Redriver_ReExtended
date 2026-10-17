@@ -45,6 +45,8 @@ Lights in the original game are flat sprites. Redriver ReExtended adds a small l
 
 The design notes are in [docs/dev-notes/volumetric-lighting.md](docs/dev-notes/volumetric-lighting.md), [part 2 (lamps)](docs/dev-notes/volumetric-lighting-part2-lamps.md) and [part 3 (sun shafts)](docs/dev-notes/volumetric-lighting-part3-sunshafts.md).
 
+![Chicago at night: headlight cones, lamp halos and glowing tail lights](docs/images/volumetric_night.jpg)
+
 ![Helicopter over Chicago at night, with lit windows and lamp halos](docs/images/chopper_night.jpg)
 
 ## Cinematic views
