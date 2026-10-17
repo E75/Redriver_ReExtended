@@ -10,7 +10,7 @@ Redriver ReExtended is a fork of [REDRIVER2](https://github.com/OpenDriver2/REDR
 
 ## Download (v0.15 beta)
 
-Do not want to build it? Download **Redriver_ReExtended_v0.15-beta.zip** from the [Releases page](https://github.com/E75/Redriver_ReExtended/releases), unzip it and follow "How to set it up with your own game files" below (you only add your own Driver 2 files, and optionally Driver 1).
+Do not want to build it? Download **Redriver_ReExtended_v0.15-beta.zip** from the [Releases page](https://github.com/E75/Redriver_ReExtended/releases), unzip it and follow "Set up (5 steps)" below.
 
 > **Beta, and updates are likely but not guaranteed.** I will most probably keep improving this, but I have a busy life, so new versions can take a while or come in bursts. Bug reports are welcome as GitHub issues; please say which city and what you were doing, and attach `REDRIVER2.log` when you can.
 
@@ -36,113 +36,38 @@ More: ground and water backdrops so the Driver 1 cities have no holes, kerb "inv
 
 <img src="docs/images/d1_cars.jpg" alt="All Driver 1 cars were checked for lamps and wheels" width="640">
 
-## Volumetric lighting
+## Set up (5 steps)
 
-Lights in the original game are flat sprites. Redriver ReExtended adds a small light volume pass (PsyCross renderer, `PsyX_postfx.cpp`) that is on by default and can be switched off under Options - Gameplay - Secret - Volumetric Options:
+1. **Download** the zip from the [Releases page](https://github.com/E75/Redriver_ReExtended/releases) and unzip it.
+2. **Driver 2 (required):** copy everything of your Driver 2 disc 1 (`LEVELS`, `DATA`, `MISSIONS`, `SOUND`, ...) into the `DRIVER2` folder next to the exe, and the extra folders of disc 2 (for example `NLEVELS`). If Windows asks about existing files (`DATA`, `GFX`, `LANG`), keep the files of the zip. `DRIVER2\LEVELS\CHICAGO.LEV` must exist.
+3. **Driver 1 (optional):** copy the `LEVELS`, `DATA` and `MISSIONS` folders of your Driver 1 disc into a `DRIVER1` folder next to `DRIVER2`.
+4. **Convert Driver 1 once:** in the game Options > Gameplay > Secret > Extended Settings > **Driver 1 DLC** > **Check Driver 1 Data** (about a minute), then switch it **On**. Or run `prepare_driver1.bat`. Details: [docs/DRIVER1_SETUP.md](docs/DRIVER1_SETUP.md).
+5. **Start** `REDRIVER2_dev.exe`. Driver 1 cities are under Take a Ride > Driver 1 Cities, the story missions under Undercover > D1 Missions.
 
-- **Lamp and headlight cones**: up to 16 lights per frame (head lamps, street lamps, traffic lights) are handed to the renderer, which adds an analytic in-scattering term along each view ray. In the dark, rain or fog a headlight shows a soft cone and every lamp a halo, instead of only a sprite. A broken lamp gives no cone, no halo and no light pool on the road.
-- **Atmospheric fog**: fog has height and takes the colour of the sky and the sun, so far buildings fade into the haze instead of popping up.
-- **Sun shafts** (god rays): a radial blur from the sun over the sky pixels only, so rays run along building edges by day. Costs about 0.6 ms of GPU time.
-- **Car gloss**: in sunlight the car body gets a second additive pass with a tight sun highlight and a faint sky reflection; it fades out at night, in rain and in fog.
-- **Dynamic road pools**: the headlights of the player and of traffic light up the road in front of them; lights never shine through the ground in the rain.
+Videos and music are optional: put the disc images as `install\Driver2CD1.bin` and `install\Driver2CD2.bin` and run `_convert_cd_fmv_xa.bat` once (needs Java). Without them the game runs without videos.
 
-The design notes are in [docs/dev-notes/volumetric-lighting.md](docs/dev-notes/volumetric-lighting.md), [part 2 (lamps)](docs/dev-notes/volumetric-lighting-part2-lamps.md) and [part 3 (sun shafts)](docs/dev-notes/volumetric-lighting-part3-sunshafts.md).
+<img src="docs/images/setup_2_driver2.png" alt="DRIVER2 folder" width="320"> <img src="docs/images/setup_3_driver1.png" alt="DRIVER1 folder" width="320">
 
-<img src="docs/images/volumetric_night.jpg" alt="Chicago at night: headlight cones, lamp halos and glowing tail lights" width="640">
+## Settings and controls
 
-<img src="docs/images/chopper_night.jpg" alt="Helicopter over Chicago at night, with lit windows and lamp halos" width="640">
+- **Extended Settings** (Options > Gameplay > Secret): Draw Distance, Traffic And People, Free Camera, Day Night Cycle, All Cities Cars, Sky, Driver 1 DLC, Impact Dents (Off / Sensitive / Less Sensitive). The same settings are in `config.ini`.
+- **Command line:** `-city <n> -mission 50` (start Take a Ride), `-cycle <minutes> -hour <h>`, `-weather 1|3`, `-fog`, `-drawdist 0|1|2`, `-crowd 1..5`, `-onfoot`, `-editor`, `-shot <frame>`.
+- **Debug menu** (Pause > Debug Options): Time of Day (Day, Night, Dusk, Dawn, Rain, Snow, Fog), Fun Cheats (Flying Car F8, Infinite Mass F6, Speed Boost Horn, Chopper), Car Spawner, Map Editor (F4).
+- **Volumetric lighting** (headlight cones, lamp halos, fog, sun shafts, car gloss) is on by default: Options > Gameplay > Secret > Volumetric Options. Notes: [docs/dev-notes/volumetric-lighting.md](docs/dev-notes/volumetric-lighting.md).
 
-## Cinematic views
-
-Use the free camera (right stick or mouse) or `-camangle <n>` for side and rear quarter views, and `-choppertest` to fly the helicopter.
-
-<img src="docs/images/taxi_newyork_night.jpg" alt="Taxi in New York at night" width="640">
-
-## How to set it up with your own game files
-
-### 1. Get the game
-
-Download the zip from the [Releases page](https://github.com/E75/Redriver_ReExtended/releases) and unzip it (or build it yourself, see below). You get `REDRIVER2_dev.exe`, `SDL2.dll`, `OpenAL32.dll`, `config.ini` and the folders `DRIVER2` and `install`.
-
-### 2. Driver 2 files (required)
-
-The game needs the files of your own Driver 2 discs **extracted on disk**, not only the disc image. The `DRIVER2` folder of the zip only holds the extras of this project (fonts, language files, ...); the levels are not in it.
-
-1. Copy the contents of the `DRIVER2` folder of your Driver 2 disc 1 (`LEVELS`, `DATA`, `MISSIONS`, `SOUND`, ... all of it) into the `DRIVER2` folder next to the exe. Do the same for disc 2 if it has folders that disc 1 lacks (for example `NLEVELS`, the night levels).
-2. When Windows asks about files that already exist (`DATA`, `GFX`, `LANG`), **keep the files of the zip**: they are newer.
-3. Check that `DRIVER2\LEVELS\CHICAGO.LEV` exists. Without it nothing works, and `prepare_driver1.bat` stops with "CHICAGO.LEV not found".
-4. Optional, for videos and music: put the disc images as `install\Driver2CD1.bin` and `install\Driver2CD2.bin` (`[cdfs] image=` in `config.ini`) and run `_convert_cd_fmv_xa.bat` once (needs Java; it uses the included jpsxdec). Without it the game runs without videos (`-nofmv`).
-5. Start `REDRIVER2_dev.exe`. The detailed original instructions are in the [upstream wiki](https://github.com/OpenDriver2/REDRIVER2/wiki/Installation-instructions).
-
-**What it should look like** (the folders of the discs show up as plain folders; the exact list can differ a little per disc):
-
-The game folder, next to `REDRIVER2_dev.exe`:
-
-<img src="docs/images/setup_1_game_folder.png" alt="Game folder" width="380">
-
-`DRIVER2` after copying the files of your Driver 2 disc into it (`LEVELS` must hold `CHICAGO.LEV`, `HAVANA.LEV`, `RIO.LEV` and `VEGAS.LEV`):
-
-<img src="docs/images/setup_2_driver2.png" alt="DRIVER2 folder" width="380">
-
-### 3. Driver 1 cities (optional)
-
-1. Copy the `LEVELS` and `DATA` folders of your Driver 1 disc into a folder `DRIVER1` next to the `DRIVER2` folder:
-
-   ```
-   REDRIVER2_dev.exe
-   config.ini
-   DRIVER2\...
-   DRIVER1\LEVELS\MIAMI.LEV, FRISCO.LEV, LA.LEV, NEWYORK.LEV, CREDITS.LEV, TRAIN.LEV
-   DRIVER1\DATA\...
-   DRIVER1\MISSIONS\MISSION.BLK      (for the story missions)
-   ```
-
-2. Convert once, either:
-   - run `tools\prepare_driver1.bat` (copy it next to the exe first), or
-   - in the game: Options > Gameplay > Secret > Extended Settings > **Driver 1 DLC** > **Check Driver 1 Data**. A message asks you to wait (about a minute). Then switch the option **On**.
-3. The result is stored in `config.ini` (`[d1dlc]`), so the game never scans again. The converted files are written to `DRIVER1\CONVERTED\` on your PC.
-4. Take a Ride > **Driver 1 Cities**, or Undercover > **D1 Missions**.
-
-What the Driver 1 folder should look like before you run `prepare_driver1.bat` (`DATA`, `LEVELS` and, for the story missions, `MISSIONS\MISSION.BLK`):
-
-<img src="docs/images/setup_3_driver1.png" alt="DRIVER1 folder" width="380">
-
-<img src="docs/images/setup_4_driver1_levels.png" alt="DRIVER1 LEVELS folder" width="380">
-
-See [docs/DRIVER1_SETUP.md](docs/DRIVER1_SETUP.md) for details and troubleshooting.
-
-### 4. Switching the new features on
-
-Options > Gameplay > Secret > **Extended Settings** lists: Draw Distance, Traffic And People, Free Camera, Day Night Cycle, All Cities Cars, Sky, Driver 1 DLC. Weather and time of day can be changed in the debug pause menu, and `config.ini` has the same settings (`[game]`, `[render]`, `[d1dlc]`).
-
-Useful options on the command line: `-city <n> -mission 50` (start Take a Ride directly), `-cycle <minutes> -hour <h>`, `-weather 1|3`, `-fog`, `-drawdist 0|1|2`, `-crowd 1..5`, `-onfoot`, `-editor`, `-shot <frame>` (writes `SCREENSHOT.BMP`).
-
-### 5. Controls and the debug menu
-
-The default `config.ini` uses modern (GTA style) Xbox controls and the analog sticks are on from the start:
+Default controls (modern Xbox layout, analog sticks on; the original layout is a comment in `[controls_game]` of `config.ini`, keyboard unchanged):
 
 | Action | Xbox controller |
 |---|---|
 | Gas / brake and reverse | RT / LT |
 | Steer / walk | left stick |
-| Camera (free camera) | right stick (or the mouse) |
+| Camera | right stick (or mouse) |
 | Get in / out of a car | Y |
 | Handbrake / sprint, wheelspin | B / A |
-| Look left / right | LB / RB |
-| Look back | click left stick |
+| Look left / right, look back | LB / RB, click left stick |
 | Horn | click right stick |
 
-The original PlayStation layout is kept as a comment in `[controls_game]` of `config.ini`. Keyboard controls are unchanged.
-
-Pause (Esc / Start) > **Debug Options** has extra options, most of them new:
-
-<img src="docs/images/debug_menu.jpg" alt="Fun Cheats in the debug menu" width="640">
-
-- **Time of Day**: Day, Night, Dusk, Dawn and Clear, Rain, **Snow**, **Fog**.
-- **Fun Cheats**: Secret Car Fun, Jericho Mode, **Flying Car** (F8), **Infinite Mass** (F6, the car is not pushed by other cars), **Speed Boost Horn** (hold the horn to push the car forward, fun together with Infinite Mass) and **Chopper** (fly the helicopter).
-- **Map Editor** (F4): see above.
-
-In debug builds (this download) the game also writes `CAMSTATE.txt` next to the exe while paused: the exact camera angles and render counters. Attach it to a bug report about a glitchy camera.
+<img src="docs/images/volumetric_night.jpg" alt="Chicago at night: headlight cones, lamp halos and glowing tail lights" width="640">
 
 ## Building (Windows)
 
