@@ -68,6 +68,47 @@ void InitialiseDenting(void)
 // the offsets). Hit points are in model space (x right, y down, z along the nose), every car has its own offsets.
 static SVECTOR gDentOffset[MAX_CARS][MAX_DENTING_VERTS];
 static unsigned char gDentDirty[MAX_CARS];
+static unsigned char gWheelLost[MAX_CARS];		// bit per wheel (physics order: 0 and 2 front, 1 and 3 rear) that was torn off
+
+int gImpactDents = 1;							// option Impact Dents (Extended Settings), on by default: dents and lost wheels
+
+#define DENT_WHEEL_DAMAGE	80		// percent of the damage bar from which a hard hit at a wheel tears it off
+#define DENT_WHEEL_MIN_HIT	300		// damage value of that hit
+#define DENT_WHEEL_REACH	210		// how close (units, Driver 2 sized car) the hit must be to the wheel
+
+int WheelIsLost(CAR_DATA* cp, int wheel)
+{
+	return gWheelLost[cp->id] >> wheel & 1;
+}
+
+// a hard hit at a wheel of a car with more than 80 percent damage tears that wheel off: it is not drawn, carries less and drags
+static void MaybeLoseWheel(CAR_DATA* cp, int hx, int hz, int value, int scale)
+{
+	CAR_COSMETICS* cos = cp->ap.carCos;
+	int i, best = -1;
+	long long bestDist = (long long)(DENT_WHEEL_REACH * scale >> 12) * (DENT_WHEEL_REACH * scale >> 12);
+
+	if (cp->totalDamage * 100 < MaxPlayerDamage[0] * DENT_WHEEL_DAMAGE || value < DENT_WHEEL_MIN_HIT || (Random2(0) & 3) == 0)
+		return;
+
+	for (i = 0; i < 4; i++)
+	{
+		// wheel position in model space (DrawCarWheels: x = -wheelDisp.vx, z = -wheelDisp.vz)
+		long long dx = hx + cos->wheelDisp[i].vx, dz = hz + cos->wheelDisp[i].vz, d2 = dx * dx + dz * dz;
+
+		if (!WheelIsLost(cp, i) && d2 < bestDist)
+		{
+			bestDist = d2;
+			best = i;
+		}
+	}
+
+	if (best >= 0)
+	{
+		gWheelLost[cp->id] |= 1 << best;
+		gDentDirty[cp->id] = 1;
+	}
+}
 
 #define DENT_OFFSET(cp, vi, axis)	(gDentOffset[(cp)->id][vi].axis)
 
@@ -92,7 +133,7 @@ void ImpactDent(CAR_DATA* cp, int hx, int hy, int hz, int value)
 	float zStretch, xStretch;
 	int frontRear, roofLine = -32767;
 
-	if (model == NULL || value <= 0 || model->num_vertices >= MAX_DENTING_VERTS)
+	if (!gImpactDents || model == NULL || value <= 0 || model->num_vertices >= MAX_DENTING_VERTS)
 		return;
 
 	// sizes are for a Driver 2 car (half length 375), longer cars dent over a larger area
@@ -206,6 +247,8 @@ void ImpactDent(CAR_DATA* cp, int hx, int hy, int hz, int value)
 
 	gDentDirty[cp->id] = 1;
 	cp->ap.needsDenting = 1;
+
+	MaybeLoseWheel(cp, hx, hz, value, scale);
 }
 
 // a car that leaves (pinged out) or is created loses its dents, so the next car in the slot is whole
@@ -214,6 +257,7 @@ void ResetImpactDents(int carId)
 	if (gDentDirty[carId])
 	{
 		memset(gDentOffset[carId], 0, sizeof(gDentOffset[carId]));
+		gWheelLost[carId] = 0;
 		gDentDirty[carId] = 0;
 	}
 }

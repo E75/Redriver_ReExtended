@@ -1810,6 +1810,9 @@ void DrawGame(void)
 	if (getenv("REDRIVER2_IMPACT") && FrameCnt == 40 && MainPlayer.playerType == PLAYER_TYPE_CAR)
 	{
 		int a[6] = { 0, 0, 0, 0, -1, 1 };
+
+		if (getenv("REDRIVER2_DAMAGE"))	// percent of the damage bar
+			car_data[MainPlayer.playerCarId].totalDamage = MaxPlayerDamage[0] * atoi(getenv("REDRIVER2_DAMAGE")) / 100;
 		int n;
 		CAR_DATA* tcp = &car_data[MainPlayer.playerCarId];
 

@@ -8,6 +8,8 @@ extern void LoadDenting(int level); // 0x0003B1F0
 
 extern void DentCar(CAR_DATA *cp); // 0x0003A310
 extern void ResetImpactDents(int carId);
+extern int gImpactDents;								// option: impact dents and lost wheels
+extern int WheelIsLost(CAR_DATA* cp, int wheel);
 extern void ImpactDent(CAR_DATA* cp, int hx, int hy, int hz, int value);	// dent round a hit point (model space)
 extern void CreateDentableCar(CAR_DATA *cp); // 0x0003A6E4
 

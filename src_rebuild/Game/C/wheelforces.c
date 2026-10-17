@@ -1,4 +1,5 @@
 #include "driver2.h"
+#include "denting.h"
 #include "wheelforces.h"
 #include "cars.h"
 #include "main.h"
@@ -501,6 +502,16 @@ void AddWheelForcesDriver1(CAR_DATA* cp, CAR_LOCALS* cl)
 			force.vy = FIXEDH(susForce * surfaceNormal[1] - cl->vel[1] * 12);
 			force.vx = FIXEDH(force.vx) * friction_coef >> 0xc;
 			force.vz = FIXEDH(force.vz) * friction_coef >> 0xc;
+
+#ifndef PSX
+			if (WheelIsLost(cp, i))
+			{
+				// [A] no wheel here: the corner drags on the ground, carries less and pulls the car to that side
+				force.vy = force.vy * 55 / 100;
+				force.vx = force.vx * 30 / 100 - FIXEDH(cl->vel[0] * 12);
+				force.vz = force.vz * 30 / 100 - FIXEDH(cl->vel[2] * 12);
+			}
+#endif
 
 			// pursuer cars have more stability
 			if (cp->controlType == CONTROL_TYPE_PURSUER_AI)

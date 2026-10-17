@@ -322,7 +322,7 @@ enum FEButtonAction
 #ifdef USE_EMBEDDED_FRONTEND_SCREENS
 #include "FEscreens.inc"
 #else
-PSXSCREEN PsxScreens[54];	// 0-39 SCRS.BIN, 40 mini cars, 41 Driver 1 cities, 42 camera orbit, 43 extended settings, 44 draw distance, 45 crowd, 46 camera distance, 47 all cities cars, 48 sky, 49 Driver 1 mission cities, 50 Driver 1 missions, 51 day night cycle, 52 volumetric effects, 53 Driver 1 DLC (40-53 are built in code)
+PSXSCREEN PsxScreens[55];	// 0-39 SCRS.BIN, 40 mini cars, 41 Driver 1 cities, 42 camera orbit, 43 extended settings, 44 draw distance, 45 crowd, 46 camera distance, 47 all cities cars, 48 sky, 49 Driver 1 mission cities, 50 Driver 1 missions, 51 day night cycle, 52 volumetric effects, 53 Driver 1 DLC (40-53 are built in code)
 #endif
 
 #define FE_OTSIZE 16
@@ -391,6 +391,7 @@ int DrawDistanceScreen(int bSetup);
 int CrowdScreen(int bSetup);
 int CameraZoomScreen(int bSetup);
 int AllCarsScreen(int bSetup);
+int ImpactDentsScreen(int bSetup);
 int SkyScreen(int bSetup);
 int DayCycleScreen(int bSetup);
 int VolumetricEffectsScreen(int bSetup);
@@ -424,6 +425,9 @@ extern int gDayCycle;						// daycycle.c
 #define FEVAR_VOLUMETRIC		24
 #define D1DLC_SCREEN			53		// built in code: Driver 1 DLC Off / On (Extended Settings)
 #define FEVAR_D1DLC				25
+#define DENTS_SCREEN			54		// built in code: impact dents and lost wheels Off / On (Extended Settings)
+#define FEVAR_DENTS				26
+extern int gImpactDents;					// denting.c
 extern int gSunShafts;					// sky.c
 extern int gVolumeLights;				// draw.c
 extern int gAtmosphere;					// draw.c
@@ -467,7 +471,8 @@ screenFunc fpUserFunctions[] = {
 	Driver1MissionListScreen,
 	DayCycleScreen,
 	VolumetricEffectsScreen,
-	Driver1DlcScreen
+	Driver1DlcScreen,
+	ImpactDentsScreen
 };
 
 char* gfxNames[4] = {
@@ -928,6 +933,9 @@ void SetVariable(int var)
 			gD1DlcEnabled = gD1DlcEnabled && gD1DlcCityMask != 0;
 			D1Dlc_SaveConfig();
 			break;
+		case FEVAR_DENTS:
+			gImpactDents = value;
+			break;
 		case FEVAR_D1MISSION:
 			GameType = GAME_DRIVER1MISSION;
 			gCurrentMissionNumber = D1_MISSION_BASE + value;
@@ -949,7 +957,7 @@ void SetVariable(int var)
 
 #ifndef PSX
 	// the Extended Settings are remembered at once, not only when the game is closed normally
-	if (code >= FEVAR_CAMERA_ORBIT && code <= FEVAR_D1DLC && code != FEVAR_D1MISSION)
+	if (code >= FEVAR_CAMERA_ORBIT && code <= FEVAR_DENTS && code != FEVAR_D1MISSION)
 		SaveCurrentProfile(0);
 #endif
 }
@@ -1495,6 +1503,9 @@ void LoadFrontendScreens(int full)
 
 		PsxScreens[D1DLC_SCREEN] = PsxScreens[31];
 		PsxScreens[D1DLC_SCREEN].userFunctionNum = 38;		// Driver1DlcScreen
+
+		PsxScreens[DENTS_SCREEN] = PsxScreens[31];
+		PsxScreens[DENTS_SCREEN].userFunctionNum = 39;		// ImpactDentsScreen
 #endif // PSX
 
 #if ENABLE_BONUS_CONTENT
@@ -3979,7 +3990,7 @@ int ExtendedOptionsScreen(int bSetup)
 {
 	if (bSetup)
 	{
-		BuildButtonsVertical(CAMERA_DISTANCE_MENU ? 8 : 7, 160, 170);
+		BuildButtonsVertical(CAMERA_DISTANCE_MENU ? 9 : 8, 160, 170);
 
 		pCurrScreen->buttons[0].action = FE_MAKEVAR(BTN_NEXT_SCREEN, DRAW_DISTANCE_SCREEN);
 		pCurrScreen->buttons[0].var = -1;
@@ -4016,7 +4027,11 @@ int ExtendedOptionsScreen(int bSetup)
 
 		pCurrScreen->buttons[next].action = FE_MAKEVAR(BTN_NEXT_SCREEN, D1DLC_SCREEN);
 		pCurrScreen->buttons[next].var = -1;
-		strcpy(pCurrScreen->buttons[next].Name, "Driver 1 DLC");
+		strcpy(pCurrScreen->buttons[next++].Name, "Driver 1 DLC");
+
+		pCurrScreen->buttons[next].action = FE_MAKEVAR(BTN_NEXT_SCREEN, DENTS_SCREEN);
+		pCurrScreen->buttons[next].var = -1;
+		strcpy(pCurrScreen->buttons[next].Name, "Impact Dents");
 
 		return 0;
 	}
@@ -4051,6 +4066,19 @@ int CrowdScreen(int bSetup)
 		}
 
 		BuildOptionButtons(5, names, FEVAR_CROWD, current);
+		return 1;
+	}
+
+	return 0;
+}
+
+int ImpactDentsScreen(int bSetup)
+{
+	if (bSetup)
+	{
+		static char* names[2] = { "Off", "On" };
+
+		BuildOptionButtons(2, names, FEVAR_DENTS, gImpactDents);
 		return 1;
 	}
 

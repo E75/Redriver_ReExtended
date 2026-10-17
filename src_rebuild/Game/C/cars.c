@@ -1,4 +1,5 @@
 #include "driver2.h"
+#include "denting.h"
 #include "cars.h"
 #include "texture.h"
 #include "overmap.h"
@@ -1181,7 +1182,10 @@ void DrawCarWheels(CAR_DATA *cp, MATRIX *RearMatrix, VECTOR *pos, int zclip)
 			gte_SetRotMatrix(&FrontMatrix);
 		}
 
-		DrawWheelObject(model, VertPtr, TransparentObject, wheelnum);
+#ifndef PSX
+		if (!WheelIsLost(cp, wheelnum))	// [A] a torn off wheel is gone
+#endif
+			DrawWheelObject(model, VertPtr, TransparentObject, wheelnum);
 
 		wheelDisp++;
 		wheel++;
