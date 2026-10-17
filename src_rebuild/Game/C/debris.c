@@ -3042,6 +3042,14 @@ void Setup_Debris(VECTOR *ipos, VECTOR *ispeed, int num_debris, int type)
 }
 
 // [D] [T]
+// [A] the original smoke fades out completely above about 97 mph; now it gets thinner but stays visible (air stream)
+#define SMOKE_MIN_TRANSPARENCY	45
+
+static int SmokeTransparencyAtSpeed(int WheelSpeed)
+{
+	return MAX((800000 - WheelSpeed) >> 0xb, SMOKE_MIN_TRANSPARENCY);
+}
+
 void Setup_Smoke(VECTOR *ipos, int start_w, int end_w, int SmokeType, int WheelSpeed, VECTOR *Drift, int Exhaust)
 {
 	int num;
@@ -3066,7 +3074,7 @@ void Setup_Smoke(VECTOR *ipos, int start_w, int end_w, int SmokeType, int WheelS
 		mysmoke->halflife = 10;
 
 		if (WheelSpeed > 200000)
-			mysmoke->transparency = (800000 - WheelSpeed >> 0xb);
+			mysmoke->transparency = SmokeTransparencyAtSpeed(WheelSpeed);
 		else
 			mysmoke->transparency = 0xff;
 
@@ -3092,7 +3100,7 @@ void Setup_Smoke(VECTOR *ipos, int start_w, int end_w, int SmokeType, int WheelS
 			mysmoke->position.vz = ipos->vz;
 
 			if (WheelSpeed > 200000)
-				mysmoke->transparency = (800000 - WheelSpeed >> 0xb);
+				mysmoke->transparency = SmokeTransparencyAtSpeed(WheelSpeed);
 			else
 				mysmoke->transparency = 255;
 			
@@ -3140,7 +3148,7 @@ void Setup_Smoke(VECTOR *ipos, int start_w, int end_w, int SmokeType, int WheelS
 				mysmoke->life = 128;
 				mysmoke->step = (end_w - start_w) / 128 * 8;
 				mysmoke->t_step = (end_w - start_w >> 6);
-				mysmoke->transparency = 80;
+				mysmoke->transparency = WheelSpeed > 400000 ? SmokeTransparencyAtSpeed(WheelSpeed) / 3 + 15 : 80;
 			}
 		}
 

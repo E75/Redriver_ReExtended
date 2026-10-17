@@ -2044,7 +2044,11 @@ void DrawCar(CAR_DATA* cp, int view)
 			}
 		}
 
+#ifdef PSX
 		if (doSmoke && WheelSpeed + 399999U < 1199999)
+#else
+		if (doSmoke)	// [A] the smoke stays at speed too (thinner, see Setup_Smoke)
+#endif
 			AddSmokingEngine(cp, doSmoke - 1, WheelSpeed);
 
 #if ENABLE_GAME_ENCHANCEMENTS
