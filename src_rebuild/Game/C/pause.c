@@ -181,27 +181,6 @@ void ToggleJerichoMode(int direction)
 	SetPlayerModel(gPlayerModel == OTHER_MODEL ? TANNER_MODEL : OTHER_MODEL, -1);
 }
 
-static char gPedestrianLookText[24] = "Pedestrian";
-static int gPedestrianLook = 0;
-
-void PlayerModelTanner(int direction)
-{
-	SetPlayerModel(TANNER_MODEL, -1);
-}
-
-void PlayerModelJericho(int direction)
-{
-	SetPlayerModel(OTHER_MODEL, -1);
-}
-
-// every press: the next of the 25 pedestrian palettes (5 bodies x 5 clothes)
-void PlayerModelPedestrian(int direction)
-{
-	SetPlayerModel(OTHER_SPRITE, gPedestrianLook % 5 + (gPedestrianLook / 5 % 5) * 16);
-	gPedestrianLook = (gPedestrianLook + 1) % 25;
-	sprintf(gPedestrianLookText, "Pedestrian %d", gPedestrianLook + 1);
-}
-
 void TogglePuppyDogCops(int direction)
 {
 	gPuppyDogCop ^= 1;
@@ -341,22 +320,10 @@ MENU_ITEM DebugTimeOfDayItems[] =
 MENU_HEADER DebugTimeOfDayHeader =
 { "Time Of Day", { 0, 0, 0, 0 }, 0u, DebugTimeOfDayItems };
 
-MENU_ITEM DebugPlayerModelItems[] =
-{
-	{ "Tanner",				PAUSE_TYPE_FUNC,	2,  PlayerModelTanner,		MENU_QUIT_NONE,		NULL },
-	{ "Jericho",			PAUSE_TYPE_FUNC,	2,  PlayerModelJericho,		MENU_QUIT_NONE,		NULL },
-	{ gPedestrianLookText,	PAUSE_TYPE_FUNC,	2,  PlayerModelPedestrian,	MENU_QUIT_NONE,		NULL },
-	{ NULL, PAUSE_TYPE_ENDITEMS, 0u, NULL, MENU_QUIT_NONE, NULL }
-};
-
-MENU_HEADER DebugPlayerModelHeader =
-{ "Player Model", { 0, 0, 0, 0 }, 0u, DebugPlayerModelItems };
-
 MENU_ITEM DebugJustForFunItems[] =
 {
 	{ "Secret Car Fun", PAUSE_TYPE_FUNC,	2,  ToggleSecretCarFun, MENU_QUIT_RESTART,	NULL },
 	{ "Jericho Mode",	PAUSE_TYPE_FUNC,	2,  ToggleJerichoMode,	MENU_QUIT_NONE,		NULL },
-	{ "Player Model",	PAUSE_TYPE_SUBMENU,	2,  NULL,				MENU_QUIT_NONE,		&DebugPlayerModelHeader },
 	{ "Flying Car",		PAUSE_TYPE_FUNC,	2,  ToggleFlyingCar,	MENU_QUIT_NONE,		NULL },
 	{ "Infinite Mass",	PAUSE_TYPE_FUNC,	2,  ToggleInfiniteMass,	MENU_QUIT_NONE,		NULL },
 	{ "Speed Boost Horn",	PAUSE_TYPE_FUNC,	2,  ToggleSpeedBoost,	MENU_QUIT_NONE,		NULL },
