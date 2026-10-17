@@ -1048,6 +1048,10 @@ void PlaceCameraInCar(PLAYER *lp, int BumperCam)
 	if (lp->cameraCarId > -1)
 		cp = &car_data[lp->cameraCarId];
 
+	// [A] a car that was removed has no cosmetics: look from the head position instead of crashing
+	if (cp && cp->ap.carCos == NULL)
+		cp = NULL;
+
 	viewer_position.vx = 0;
 	viewer_position.vy = 0;
 	viewer_position.vz = 0;
