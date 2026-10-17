@@ -1965,6 +1965,9 @@ void DrawGame(void)
 			gPingFail[0], gPingFail[1], gPingFail[2], gPingFail[3], gPingFail[4], gPingFail[5], gPingFail[6], gPingFail[7], gPingFail[8], gPingFail[9], gPingFail[10], gPingFail[11], gPingFail[12], gPingFail[13]);
 
 		extern int gPedPingFail[4];
+		extern int gCivReverseCount, gCivNearContact;
+		printInfo("shot: car following: reverse manoeuvres %d, near contacts %d\n", gCivReverseCount, gCivNearContact);
+
 		printInfo("shot: ped ping in results: spawned %d, no pavement %d, too close %d\n", gPedPingFail[0], gPedPingFail[1], gPedPingFail[2]);
 
 		extern int num_pedestrians;

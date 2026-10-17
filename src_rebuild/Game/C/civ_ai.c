@@ -75,6 +75,9 @@ int gCivSpawnFrame[MAX_CARS];	// frame a civilian car was pinged in: it fades in
 // traffic jam breaker (CivJamBreaker): steps a civilian car has stood still without a reason, and steps it may still ignore the cars in front
 static int civStuckSteps[MAX_CARS];
 static int civBargeLeft[MAX_CARS];
+static int civReverseLeft[MAX_CARS];		// steps a stuck car still backs up
+int gCivReverseCount;							// test log: reverse manoeuvres started
+int gCivNearContact;							// test log: steps a moving car had another car closer than half its length
 #endif
 
 #if defined(DEBUG_OPTIONS) && !defined(PSX)
@@ -199,6 +202,7 @@ int InitCar(CAR_DATA* cp, int direction, LONGVECTOR4* startPos, unsigned char co
 #ifndef PSX
 	civStuckSteps[cp->id] = 0;
 	civBargeLeft[cp->id] = 0;
+	civReverseLeft[cp->id] = 0;
 #endif
 
 	if (startPos == NULL)
@@ -3147,6 +3151,27 @@ int CivAccelTrafficRules(CAR_DATA * cp, int* distToNode)
 }
 
 int brakeLength[MAX_CARS];
+int brakeLeadSpeed[MAX_CARS];		// speed (units per step) of the car that sets brakeLength, along the own heading
+
+#if defined(DEBUG_OPTIONS) && !defined(PSX)
+#include <stdlib.h>
+static int OldFollow(void)	// test switch: REDRIVER2_OLDFOLLOW=1 gives the original look-ahead, no gap rule and no backing up
+{
+	static int old = -1;
+	if (old < 0)
+		old = getenv("REDRIVER2_OLDFOLLOW") != NULL;
+	return old;
+}
+#else
+#define OldFollow() 0
+#endif
+
+#ifndef PSX
+#define CIV_LOOKAHEAD_STEPS		20		// the look-ahead box covers this many steps of travel (13 in the original)
+#define CIV_HEADWAY_STEPS		18		// wanted time gap behind a car at the same speed (0.6 s)
+#else
+#define CIV_LOOKAHEAD_STEPS		13
+#endif
 
 int CAR_PAUSE_START = 100;
 static CAR_DATA(*horncarflag[2]) = { 0 };
@@ -3167,6 +3192,7 @@ void SetUpCivCollFlags(void)
 	CDATA2D cd[2];
 
 	ClearMem((char*)brakeLength, sizeof(brakeLength));
+	ClearMem((char*)brakeLeadSpeed, sizeof(brakeLeadSpeed));
 
 	for (cp0 = &car_data[MAX_CARS - 1]; cp0 >= car_data; cp0--)
 	{
@@ -3181,7 +3207,7 @@ void SetUpCivCollFlags(void)
 		extraLength = FIXEDH(cp0->hd.wheel_speed);
 
 		if (cp0->wheel_angle < 61)
-			extraLength *= 13;
+			extraLength *= OldFollow() ? 13 : CIV_LOOKAHEAD_STEPS;
 		else
 			extraLength *= 4;
 
@@ -3276,6 +3302,14 @@ void SetUpCivCollFlags(void)
 			{
 				cp0BrakeLength = brake;
 				brakeLength[cp0->id] = cp0BrakeLength;
+
+#ifndef PSX
+				// the car ahead only counts as moving when it drives the same way (crossing or oncoming cars are obstacles)
+				brakeLeadSpeed[cp0->id] = (!isTanner && ABS(DIFF_ANGLES(cp0->hd.direction, cp1->hd.direction)) < 512) ? FIXEDH(cp1->hd.wheel_speed) : 0;
+
+				if (brake < cp0Length / 2 && FIXEDH(cp0->hd.wheel_speed) > 10)
+					gCivNearContact++;
+#endif
 			}
 
 			// don't do anything further when it tries to park
@@ -3446,6 +3480,29 @@ int CivAccel(CAR_DATA * cp)
 
 			if (ret > tmpret)
 				ret = tmpret;
+
+#ifndef PSX
+			// [A] car following (Intelligent Driver Model): the wanted gap grows with the own speed and with the speed
+			// difference to the car ahead, brake from the ratio of wanted to real gap (1.8 = 2 * sqrt(a * b) in units per step^2)
+			{
+				int v = FIXEDH(cp->hd.wheel_speed);
+				int closing = v - brakeLeadSpeed[cp->id];
+
+				if (v > 0 && closing > 0 && !OldFollow())
+				{
+					long long wanted = lbody / 4 + (long long)v * CIV_HEADWAY_STEPS + (long long)v * closing * 10 * 2048 / (18 * MAP_CELL_SIZE);
+					float ratio = (float)wanted / MAX(collDat, 1);
+
+					if (ratio > 1.0f)
+						tmpret = ratio * ratio >= 3.0f ? newAccel * -2 : (int)(newAccel * (1.0f - ratio * ratio));
+					else
+						tmpret = newAccel;
+
+					if (ret > tmpret)
+						ret = tmpret;
+				}
+			}
+#endif
 		}
 
 		// stop car if interrupted by pedestrian Tanner
@@ -4008,6 +4065,32 @@ void CreateRoadblock(void)
 #define JAM_BARGE_STEPS		900		// 30 s: a car in view yields no more and ignores the cars in front for a moment
 #define JAM_BARGE_LENGTH	90
 #define JAM_PLAYER_RANGE	2000	// no barging next to the player, it would ram the player car
+#define CIV_REVERSE_STEPS	60		// 2 s standing still although the car wants to drive: back up
+
+// nothing close behind the car, so it can back up
+static int CivClearBehind(CAR_DATA* cp)
+{
+	int sx = RSIN(cp->hd.direction), cx = RCOS(cp->hd.direction);
+	int reach = cp->ap.carCos->colBox.vz * 4;
+
+	for (CAR_DATA* other = car_data; other < &car_data[MAX_CARS]; other++)
+	{
+		int dx, dz, along, side;
+
+		if (other == cp || other->controlType == CONTROL_TYPE_NONE)
+			continue;
+
+		dx = other->hd.where.t[0] - cp->hd.where.t[0];
+		dz = other->hd.where.t[2] - cp->hd.where.t[2];
+		along = -FIXEDH(dx * sx + dz * cx);		// distance behind the car
+		side = FIXEDH(dx * cx - dz * sx);
+
+		if (along > 0 && along < reach && ABS(side) < cp->ap.carCos->colBox.vx * 2)
+			return 0;
+	}
+
+	return 1;
+}
 
 // [A] gridlock at crossings: a civilian car that stands still for no good reason (not a red light, not parked, not the car the
 // player left) gets going again. Out of view it is removed, in view it first yields no more and ignores the cars in front.
@@ -4029,6 +4112,14 @@ static void CivJamBreaker(CAR_DATA* cp)
 
 	civStuckSteps[id]++;
 	hopeless = (cp->ai.c.thrustState == CIV_AI_THRUST_STOP);
+
+	// [A] stuck for 2 s (and again after 8 s) although it wants to drive and no car is in front: back up for 0.7 s, if free behind
+	if ((civStuckSteps[id] == CIV_REVERSE_STEPS || civStuckSteps[id] == CIV_REVERSE_STEPS * 4) && !hopeless &&
+		cp->ai.c.thrustState == CIV_AI_THRUST_ACCELERATE && brakeLength[id] == 0 && !OldFollow() && CivClearBehind(cp))
+	{
+		civReverseLeft[id] = 20;
+		gCivReverseCount++;
+	}
 
 	if (civStuckSteps[id] >= JAM_PING_OUT_STEPS &&
 		((civStuckSteps[id] >= JAM_BARGE_STEPS && hopeless) || !PositionInViewCone(cp->hd.where.t[0], cp->hd.where.t[2], 100000)))
@@ -4093,6 +4184,16 @@ int CivControl(CAR_DATA* cp)
 		if (thrust < 0 && cp->hd.wheel_speed < 100)
 			thrust = 0;
 
+
+#ifndef PSX
+		// [A] a car that got stuck backs up for a moment (started by CivJamBreaker)
+		if (civReverseLeft[cp->id] > 0 && !OldFollow())
+		{
+			civReverseLeft[cp->id]--;
+			steer = 0;
+			thrust = -1000;
+		}
+#endif
 		cp->wheel_angle = steer;
 		cp->thrust = thrust;
 
