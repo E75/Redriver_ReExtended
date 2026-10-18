@@ -1207,7 +1207,7 @@ void ProcessCarPad(CAR_DATA* cp, u_int pad, char PadSteer, char use_analogue)
 			cp->wheelspin = 0;
 
 		// continue without burnout
-		if (cp->wheelspin != 0 && cp->hd.wheel_speed > 452952)
+		if (cp->wheelspin != 0 && cp->hd.wheel_speed > (D1HandlingActive() ? 663552 : 452952))
 		{
 			cp->wheelspin = 0;
 			pad |= CAR_PAD_ACCEL;
@@ -1304,10 +1304,14 @@ void ProcessCarPad(CAR_DATA* cp, u_int pad, char PadSteer, char use_analogue)
 			int rws;
 
 			// brakes
-			rws = FIXEDH(cp->hd.wheel_speed * 1500 / 1024);
+			// D1 city: the wheel speed is already D1 sized, and the low speed brake is the D1 one (7000 after WORLD_FORCE)
+			if (D1HandlingActive())
+				rws = FIXEDH(cp->hd.wheel_speed);
+			else
+				rws = FIXEDH(cp->hd.wheel_speed * 1500 / 1024);
 
 			if (-rws < 23)
-				rws = -5000;
+				rws = D1HandlingActive() ? -4778 : -5000;
 			else
 				rws = ((rws + 278) * -4778) >> 8;
 

@@ -685,6 +685,8 @@ int main(int argc, char** argv)
 		ini_sget(config, "d1dlc", "missions", "%d", &gD1MissionsEnabled);
 		extern int gD1ChaseInfiniteMass;
 		ini_sget(config, "d1dlc", "chaseInfiniteMass", "%d", &gD1ChaseInfiniteMass);
+		extern int gD1Handling;
+		ini_sget(config, "d1dlc", "d1Handling", "%d", &gD1Handling);
 		
 	
 		gCameraDefaultScrZ = MAX(MIN(newScrZ, 384), 128);
