@@ -63,6 +63,7 @@ extern int gVolumeLights;
 extern int gAtmosphere;
 extern int gSunShadows;
 extern int gCarGloss;
+extern int gCarReflection;
 extern int gPlayLog;
 extern int gCameraAutoCenter, gCameraReturnDelay, gCameraStickSens, gCameraInvertY, gCameraMouse, gCameraMouseSens;	// camera.c
 extern int g_FreeCameraEnabled;
@@ -647,6 +648,7 @@ int main(int argc, char** argv)
 		ini_sget(config, "render", "atmosphere", "%d", &gAtmosphere);
 		ini_sget(config, "render", "sunShadows", "%d", &gSunShadows);
 		ini_sget(config, "render", "carGloss", "%d", &gCarGloss);
+		ini_sget(config, "render", "carReflection", "%d", &gCarReflection);
 
 		// configure host game
 		ini_sget(config, "game", "drawDistance", "%d", &gDrawDistance);

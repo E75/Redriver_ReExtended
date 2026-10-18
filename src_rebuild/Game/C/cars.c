@@ -441,9 +441,16 @@ int gCarGloss = 1;	// config.ini [render] carGloss: the sun mirrors in the paint
 #define CAR_GLOSS_FADE_FROM	4000	// distance (view z) where the gloss starts to fade
 #define CAR_GLOSS_FADE_TO	12000	// and where it is gone
 #define CAR_GLOSS_LAMP_RADIUS	80	// model units around a lamp that get no gloss (the volumetric lights do the shining)
+#define CAR_REFLECT_HORIZON	44		// brightest haze of the horizon mirrored in the paint (config.ini [render] carReflection)
+#define CAR_REFLECT_OVERCAST	0.55f	// environment reflection that remains without a sun: wet paint under a grey sky
+#define CAR_REFLECT_FOG		0.30f	// the same in fog and falling snow
+
+int gCarReflection = 1;			// config.ini [render] carReflection: the sky, the horizon and a wet sheen mirror in the paint, also without sun
 
 static int sGlossOn;				// the car being drawn gets gloss
 static float sGlossGain;			// sun strength x distance fade
+static float sEnvGain;				// environment reflection (sky, horizon) x distance fade: stays in rain and fog
+static float sWet;					// 1 = wet paint (rain, wet road): the sky reflection is stronger
 static float sCarM[3][3];			// model space to view space of the car being drawn (scaled to 1)
 static float sSun[3], sEye[3], sHalf[3], sUp[3];	// sun, camera, half way vector and world up in view space
 static float sPointNormal[256][3];	// point normals of the car in view space, pointing out of the car
@@ -482,9 +489,19 @@ static void SetupCarGloss(CAR_DATA* cp, MATRIX* carMat, VECTOR* pos)
 	if (!gCarGloss || pos->vz <= 0 || pos->vz >= CAR_GLOSS_FADE_TO || sun->vy >= 0)
 		return;
 
-	sGlossGain = SunShine() * (1.0f - SmoothStepF(CAR_GLOSS_FADE_FROM, CAR_GLOSS_FADE_TO, (float)pos->vz));
+	{
+		float fade = 1.0f - SmoothStepF(CAR_GLOSS_FADE_FROM, CAR_GLOSS_FADE_TO, (float)pos->vz);
+		float shine = SunShine();
+		float overcast = (gWeather == WEATHER_RAIN || gWeather == WEATHER_WET) ? CAR_REFLECT_OVERCAST : (gFogTarget || gSnowTarget) ? CAR_REFLECT_FOG : 0.0f;
 
-	if (sGlossGain < 0.02f)
+		sWet = (gWeather == WEATHER_RAIN || gWeather == WEATHER_WET) ? 1.0f : 0.0f;
+		sGlossGain = shine * fade;
+		float rest = overcast * SmoothStepF(-2.0f, 6.0f, DayCycleActive() ? gSunElevation : 10.0f);
+
+		sEnvGain = gCarReflection ? (shine > rest ? shine : rest) * fade : sGlossGain;
+	}
+
+	if (sEnvGain < 0.02f)
 		return;
 
 	// the fixed dawn and dusk sun stands lower than its position says: the same rule as SunShadow, so the spot sits where the shadow points
@@ -559,11 +576,11 @@ static int GlossAt(const float* n)
 	float nv = n[0] * sEye[0] + n[1] * sEye[1] + n[2] * sEye[2];
 	float g = 0.0f;
 
-	if (sunSide > 0.0f && d > 0.0f)
+	if (sunSide > 0.0f && d > 0.0f && sGlossGain > 0.0f)
 	{
 		float d2 = d * d, d4 = d2 * d2, d16 = d4 * d4 * d4 * d4, d32 = d16 * d16;
 
-		g += CAR_GLOSS_SPOT * d32 * d32;
+		g += CAR_GLOSS_SPOT * d32 * d32 * sGlossGain;
 	}
 
 	if (nv > 0.0f)
@@ -577,11 +594,21 @@ static int GlossAt(const float* n)
 		{
 			float edge = 1.0f - nv;
 
-			g += CAR_GLOSS_SKY * up * (0.3f + 0.7f * edge * edge * edge);
+			g += CAR_GLOSS_SKY * (1.0f + sWet * gCarReflection) * up * (0.3f + 0.7f * edge * edge * edge) * sEnvGain;
+		}
+
+		// the horizon: panels that mirror sideways show its haze, glass-like at glancing angles
+		if (gCarReflection)
+		{
+			float h = 1.0f - 2.5f * fabsf(up);
+			float edge = 1.0f - nv;
+
+			if (h > 0.0f)
+				g += CAR_REFLECT_HORIZON * h * h * (0.25f + 0.75f * edge * edge) * sEnvGain;
 		}
 	}
 
-	return MIN(255, (int)(g * sGlossGain));
+	return MIN(255, (int)g);
 }
 
 static int GlossNearLamp(const SVECTOR* v)
