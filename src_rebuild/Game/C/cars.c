@@ -8,6 +8,7 @@
 #include "system.h"
 #include "debris.h"
 #include "main.h"
+#include "wheelforces.h"
 #include "camera.h"
 #include "handling.h"
 #include "cosmetic.h"
@@ -1304,7 +1305,7 @@ void DrawCarWheels(CAR_DATA *cp, MATRIX *RearMatrix, VECTOR *pos, int zclip)
 			sWheelPos.vx = -17 - wheelDisp->vx;
 
 		sWheelPos.vz = -wheelDisp->vz;
-		sWheelPos.vy = (-wheelSize - wheelDisp->vy) - wheel->susCompression + 14;
+		sWheelPos.vy = (-wheelSize - wheelDisp->vy) - wheel->susCompression + WheelRestCompression();
 
 		gte_SetRotMatrix(RearMatrix);
 		gte_ldv0(&sWheelPos);

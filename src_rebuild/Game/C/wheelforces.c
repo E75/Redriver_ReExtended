@@ -34,6 +34,12 @@ int D1HandlingActive(void)
 	return gD1Handling && IS_DRIVER1_CITY(GameLevel);
 }
 
+// D1 depth offset 20, D2 14 (20 / 1.4648): the wheels are drawn with the same offset, or they float above the road
+int WheelRestCompression(void)
+{
+	return D1HandlingActive() ? 20 : 14;
+}
+
 struct CAR_LOCALS
 {
 	LONGVECTOR4 vel;
@@ -347,9 +353,9 @@ void AddWheelForcesDriver1(CAR_DATA* cp, CAR_LOCALS* cl)
 
 		oldCompression = wheel->susCompression;
 		if (d1)
-			newCompression = surfacePoint[1] - wheelPos[1] + 20;	// D1 takes the plain height difference, no slope factor
+			newCompression = surfacePoint[1] - wheelPos[1] + WheelRestCompression();	// D1 takes the plain height difference, no slope factor
 		else
-			newCompression = FIXEDH((surfacePoint[1] - wheelPos[1]) * surfaceNormal[1]) + 14;
+			newCompression = FIXEDH((surfacePoint[1] - wheelPos[1]) * surfaceNormal[1]) + WheelRestCompression();
 
 		if (newCompression < 0)
 			newCompression = 0;
