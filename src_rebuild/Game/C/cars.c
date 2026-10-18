@@ -448,6 +448,12 @@ int gCarGloss = 1;	// config.ini [render] carGloss: the sun mirrors in the paint
 int gCarSmooth = 1;				// config.ini [render] carSmooth: near cars get their gloss on triangles cut in four, so highlights run smoothly over the panels
 #define CAR_SMOOTH_DISTANCE	6000	// view z under which a car is cut finer
 #define CAR_SMOOTH_MAX_CARS	6		// cars per frame that get the fine gloss (prim buffer)
+#define CAR_SMOOTH_ALPHA	0.6f	// carSmooth 2: how far a new edge middle moves towards the curved surface (Phong tessellation)
+#define CAR_SMOOTH_SHARP	0.77f	// a vertex whose faces turn more than about 40 degrees from each other stays a hard corner
+#define CAR_SMOOTH_MAX_TRIS	512
+
+static int sBodySmooth;				// carSmooth 2: the body of the car being drawn is cut in four and curved
+static SVECTOR sMid[CAR_SMOOTH_MAX_TRIS][3];	// curved edge middles of every body triangle (model space), for the gloss
 
 int gCarReflection = 1;			// config.ini [render] carReflection: the sky, the horizon and a wet sheen mirror in the paint, also without sun
 
@@ -455,6 +461,7 @@ static int sGlossOn;				// the car being drawn gets gloss
 static float sGlossGain;			// sun strength x distance fade
 static float sEnvGain;				// environment reflection (sky, horizon) x distance fade: stays in rain and fog
 static int sSmooth;					// the car being drawn gets the fine gloss
+static int sNearSmooth;				// the car being drawn is near enough to be cut finer
 static int sSmoothCars;				// fine gloss cars this frame
 static int sSmoothFrame = -1;
 static float sWet;					// 1 = wet paint (rain, wet road): the sky reflection is stronger
@@ -511,14 +518,7 @@ static void SetupCarGloss(CAR_DATA* cp, MATRIX* carMat, VECTOR* pos)
 	if (sEnvGain < 0.02f)
 		return;
 
-	if (sSmoothFrame != FrameCnt)
-	{
-		sSmoothFrame = FrameCnt;
-		sSmoothCars = 0;
-	}
-
-	sSmooth = gCarSmooth && pos->vz < CAR_SMOOTH_DISTANCE && sSmoothCars < CAR_SMOOTH_MAX_CARS;
-	sSmoothCars += sSmooth;
+	sSmooth = sNearSmooth;
 
 	// the fixed dawn and dusk sun stands lower than its position says: the same rule as SunShadow, so the spot sits where the shadow points
 	if (!DayCycleActive() && (gTimeOfDay == TIME_DAWN || gTimeOfDay == TIME_DUSK))
@@ -778,11 +778,25 @@ static void plotCarGloss(CAR_MODEL* car, plotCarGlobals* pg)
 
 				for (k = 0; k < 3; k++)
 				{
+					m[k][0] = (s[k][0] + s[(k + 1) % 3][0]) / 2;
+					m[k][1] = (s[k][1] + s[(k + 1) % 3][1]) / 2;
+				}
+
+				// the curved body: the middles lie where the body is drawn, not on the flat triangle
+				if (sBodySmooth && list == 1 && src - car->pGT3 < CAR_SMOOTH_MAX_TRIS)
+				{
+					SVECTOR* mm = sMid[src - car->pGT3];
+
+					gte_ldv3(&mm[0], &mm[1], &mm[2]);
+					gte_rtpt();
+					gte_stsxy3(&m[0][0], &m[1][0], &m[2][0]);
+				}
+
+				for (k = 0; k < 3; k++)
+				{
 					const float* p = nk[k], *q = nk[(k + 1) % 3];
 					float nm[3] = { p[0] + q[0], p[1] + q[1], p[2] + q[2] };
 
-					m[k][0] = (s[k][0] + s[(k + 1) % 3][0]) / 2;
-					m[k][1] = (s[k][1] + s[(k + 1) % 3][1]) / 2;
 					GlossNormalize(nm);
 					gm[k] = GlossAt(nm);
 				}
@@ -1400,6 +1414,190 @@ void PlayerCarFX(CAR_DATA *cp)
 		AddReverseLight(cp);
 }
 
+#ifndef PSX
+// decides per car and frame whether it is cut finer (gloss: carSmooth 1, body too: carSmooth 2)
+static void SetupCarSmooth(int viewZ)
+{
+	if (sSmoothFrame != FrameCnt)
+	{
+		sSmoothFrame = FrameCnt;
+		sSmoothCars = 0;
+	}
+
+	sNearSmooth = gCarSmooth && viewZ < CAR_SMOOTH_DISTANCE && sSmoothCars < CAR_SMOOTH_MAX_CARS;
+	sSmoothCars += sNearSmooth;
+	sBodySmooth = sNearSmooth && gCarSmooth >= 2;
+}
+
+// Phong tessellation: an edge middle moves towards the tangent planes of the vertex normals at both ends, so a panel
+// bulges where the surface curves and stays flat where it is flat; a hard corner (sharp) does not pull
+static void CurvedMid(SVECTOR* out, const SVECTOR* a, const SVECTOR* b, const float* na, const float* nb, int sharpA, int sharpB)
+{
+	float e[3] = { (b->vx - a->vx) * 0.5f, (b->vy - a->vy) * 0.5f, (b->vz - a->vz) * 0.5f };
+	float d[3] = { 0, 0, 0 };
+	float elen = sqrtf(e[0] * e[0] + e[1] * e[1] + e[2] * e[2]), dlen;
+	int i;
+
+	if (!sharpA)
+	{
+		float k = -(e[0] * na[0] + e[1] * na[1] + e[2] * na[2]);
+
+		for (i = 0; i < 3; i++) d[i] += k * na[i];
+	}
+
+	if (!sharpB)
+	{
+		float k = e[0] * nb[0] + e[1] * nb[1] + e[2] * nb[2];
+
+		for (i = 0; i < 3; i++) d[i] += k * nb[i];
+	}
+
+	for (i = 0; i < 3; i++) d[i] *= CAR_SMOOTH_ALPHA * 0.5f;
+
+	dlen = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+
+	// never pull more than a third of the edge half length
+	if (dlen > elen * 0.33f && dlen > 0.0f)
+		for (i = 0; i < 3; i++) d[i] *= elen * 0.33f / dlen;
+
+	out->vx = (short)((a->vx + b->vx) / 2.0f + d[0]);
+	out->vy = (short)((a->vy + b->vy) / 2.0f + d[1]);
+	out->vz = (short)((a->vz + b->vz) / 2.0f + d[2]);
+}
+
+// The body of a car with every triangle cut in four and the new middles curved. The result goes through the original plot
+// functions in batches (their vertex indices are one byte): each batch is a small model of its own with three vertices per
+// triangle, so the lighting, the dynamic lights, the damage texture offset and the palette stay untouched.
+static void plotCarBodySmooth(CAR_MODEL* car, plotCarGlobals* pg, int palette)
+{
+	enum { PER_BATCH = 21 };		// 21 triangles become 84, 252 vertices
+
+	static float vn[256][3];
+	static unsigned char sharp[256];
+	static SVECTOR fv[256];
+	static CAR_POLY fp[PER_BATCH * 4];
+	static const unsigned char tri[4][3] = { { 0, 3, 5 }, { 3, 1, 4 }, { 5, 4, 2 }, { 3, 4, 5 } };
+	SVECTOR* vlist = car->vlist;
+	int t, i, k, n = 0, fine = 0;
+
+	// vertex normals of the (dented) body: the sum of the faces around a vertex; a vertex whose faces disagree is a hard corner
+	memset(vn, 0, sizeof(vn));
+	memset(sharp, 0, sizeof(sharp));
+
+	for (int pass = 0; pass < 2; pass++)
+	{
+		for (t = 0; t < car->numGT3; t++)
+		{
+			const int idx[3] = { car->pGT3[t].vindices & 0xff, car->pGT3[t].vindices >> 8 & 0xff, car->pGT3[t].vindices >> 16 & 0xff };
+			const SVECTOR* a = vlist + idx[0], *b = vlist + idx[1], *c = vlist + idx[2];
+			float f[3] = {
+				(float)(b->vy - a->vy) * (c->vz - a->vz) - (float)(b->vz - a->vz) * (c->vy - a->vy),
+				(float)(b->vz - a->vz) * (c->vx - a->vx) - (float)(b->vx - a->vx) * (c->vz - a->vz),
+				(float)(b->vx - a->vx) * (c->vy - a->vy) - (float)(b->vy - a->vy) * (c->vx - a->vx) };
+
+			if (pass == 0)
+			{
+				for (k = 0; k < 3; k++)
+					for (i = 0; i < 3; i++)
+						vn[idx[k]][i] += f[i];
+			}
+			else
+			{
+				float len = sqrtf(f[0] * f[0] + f[1] * f[1] + f[2] * f[2]);
+
+				if (len < 0.001f)
+					continue;
+
+				for (k = 0; k < 3; k++)
+					if ((f[0] * vn[idx[k]][0] + f[1] * vn[idx[k]][1] + f[2] * vn[idx[k]][2]) / len < CAR_SMOOTH_SHARP)
+						sharp[idx[k]] = 1;
+			}
+		}
+
+		if (pass == 0)
+		{
+			for (i = 0; i < 256; i++)
+			{
+				float len = sqrtf(vn[i][0] * vn[i][0] + vn[i][1] * vn[i][1] + vn[i][2] * vn[i][2]);
+
+				if (len > 0.001f)
+				{
+					vn[i][0] /= len; vn[i][1] /= len; vn[i][2] /= len;
+				}
+				else
+					sharp[i] = 1;
+			}
+		}
+	}
+
+	for (t = 0; t < car->numGT3; t++)
+	{
+		const CAR_POLY* src = &car->pGT3[t];
+		const int vi[3] = { src->vindices & 0xff, src->vindices >> 8 & 0xff, src->vindices >> 16 & 0xff };
+		const int ni[3] = { src->nindices & 0xff, src->nindices >> 8 & 0xff, src->nindices >> 16 & 0xff };
+		SVECTOR P[6];
+		short C[6];
+		int U[6], V[6];
+
+		// corners 0..2, edge middles 3 (0-1), 4 (1-2), 5 (2-0)
+		for (k = 0; k < 3; k++)
+		{
+			P[k] = vlist[vi[k]];
+			C[k] = car->nlist[ni[k]].pad;
+		}
+
+		U[0] = src->clut_uv0 & 0xff; V[0] = src->clut_uv0 >> 8 & 0xff;
+		U[1] = src->tpage_uv1 & 0xff; V[1] = src->tpage_uv1 >> 8 & 0xff;
+		U[2] = src->uv3_uv2 & 0xff; V[2] = src->uv3_uv2 >> 8 & 0xff;
+
+		for (k = 0; k < 3; k++)
+		{
+			const int a = k, b = (k + 1) % 3, m = 3 + k;
+
+			CurvedMid(&P[m], &P[a], &P[b], vn[vi[a]], vn[vi[b]], sharp[vi[a]], sharp[vi[b]]);
+			U[m] = (U[a] + U[b]) / 2;
+			V[m] = (V[a] + V[b]) / 2;
+			C[m] = (short)((((C[a] & 0xff) + (C[b] & 0xff)) / 2) | ((((C[a] >> 8) & 0xff) + ((C[b] >> 8) & 0xff)) / 2) << 8);
+		}
+
+		if (t < CAR_SMOOTH_MAX_TRIS)
+			for (k = 0; k < 3; k++)
+				sMid[t][k] = P[3 + k];
+
+		// the four triangles: three corners and the middle one
+		for (i = 0; i < 4; i++)
+		{
+			CAR_POLY* f = &fp[n];
+
+			for (k = 0; k < 3; k++)
+			{
+				fv[fine + k] = P[tri[i][k]];
+				fv[fine + k].pad = C[tri[i][k]];
+			}
+
+			f->vindices = f->nindices = fine | (fine + 1) << 8 | (fine + 2) << 16;
+			f->clut_uv0 = (src->clut_uv0 & 0xffff0000) | V[tri[i][0]] << 8 | U[tri[i][0]];
+			f->tpage_uv1 = (src->tpage_uv1 & 0xffff0000) | V[tri[i][1]] << 8 | U[tri[i][1]];
+			f->uv3_uv2 = (src->uv3_uv2 & 0xffff0000) | V[tri[i][2]] << 8 | U[tri[i][2]];
+			f->originalindex = src->originalindex;
+
+			n++;
+			fine += 3;
+		}
+
+		if (n == PER_BATCH * 4 || t == car->numGT3 - 1)
+		{
+#ifdef DYNAMIC_LIGHTING
+			(gEnableDlights ? plotCarPolyGT3Lit : plotCarPolyGT3)(n, fp, fv, fv, pg, palette);
+#else
+			plotCarPolyGT3(n, fp, fv, fv, pg, palette);
+#endif
+			n = fine = 0;
+		}
+	}
+}
+#endif
+
 // [D] [T]
 void plotNewCarModel(CAR_MODEL* car, int palette)
 {
@@ -1456,7 +1654,10 @@ void plotNewCarModel(CAR_MODEL* car, int palette)
 	{
 		_pg.intensity = (combointensity & 0xfcfcf0U) >> 2;
 #ifdef DYNAMIC_LIGHTING
-		(gEnableDlights ? plotCarPolyGT3Lit : plotCarPolyGT3)(car->numGT3, car->pGT3, car->vlist, car->nlist, &_pg, palette);
+		if (sBodySmooth)
+			plotCarBodySmooth(car, &_pg, palette);
+		else
+			(gEnableDlights ? plotCarPolyGT3Lit : plotCarPolyGT3)(car->numGT3, car->pGT3, car->vlist, car->nlist, &_pg, palette);
 #else
 		plotCarPolyGT3nolight(car->numGT3, car->pGT3, car->vlist, &_pg, palette);
 #endif // DYNAMIC_LIGHTING
@@ -1465,7 +1666,10 @@ void plotNewCarModel(CAR_MODEL* car, int palette)
 	{
 		_pg.intensity = combointensity & 0xffffff;
 #ifdef DYNAMIC_LIGHTING
-		(gEnableDlights ? plotCarPolyGT3Lit : plotCarPolyGT3)(car->numGT3, car->pGT3, car->vlist, car->nlist, &_pg, palette);
+		if (sBodySmooth)
+			plotCarBodySmooth(car, &_pg, palette);
+		else
+			(gEnableDlights ? plotCarPolyGT3Lit : plotCarPolyGT3)(car->numGT3, car->pGT3, car->vlist, car->nlist, &_pg, palette);
 #else
 		plotCarPolyGT3(car->numGT3, car->pGT3, car->vlist, car->nlist, &_pg, palette);
 #endif
@@ -2206,6 +2410,7 @@ void DrawCar(CAR_DATA* cp, int view)
 #endif
 
 #ifndef PSX
+		SetupCarSmooth(pos.vz);
 		SetupCarGloss(cp, &workmatrix, &pos);
 #endif
 
@@ -2213,6 +2418,7 @@ void DrawCar(CAR_DATA* cp, int view)
 
 #ifndef PSX
 		sGlossOn = 0;
+		sBodySmooth = 0;
 #endif
 
 #if defined(DEBUG_OPTIONS) && !defined(PSX)
