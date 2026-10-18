@@ -6,7 +6,7 @@ Format (little endian), next to the .CHASE file of the same mission, same varian
   then per frame: uint16 pad, int8 steer
 pad = recorded pad word masked like the original (0xa0fc); bit 0 is set when the frame uses analogue steering
 (the original also steers analogue with a stick value of 0, so steer alone cannot tell it apart).
-steer = stick value from the steering table of the game executable (0 for digital frames).
+steer = stick value from the 16 byte steering table of the game data (0 for digital frames).
 Pad frame f is the input applied to route frame f of the .CHASE file (frame 0 = start state), repeat counts unrolled
 (records of 3 bytes: pad high, pad low, repeat; 1000 of them before the other entry data, which long runs read on into).
 startY is the stored value; the original ignores it and puts the car at ground height + 163.
@@ -31,15 +31,12 @@ START_OFFSET = 4600
 PAD_MASK = 0xa0fc
 PAD_ANALOGUE = 0x0001
 OP_CHASE_CAR_MODEL = 67
-STEER_TABLE_US = 0x8b6c8			# executable address of the 16 byte steering table
-EU_DATA_SHIFT = -0x5c4				# European disc: data sits this much lower
-EXE_LOAD = 0x80010000 - 0x800
 
 
-def steer_table(exe: bytes, address: int) -> tuple[int, ...]:
-    table = struct.unpack_from('<16b', exe, (address | 0x80000000) - EXE_LOAD)
+def steer_table(data: bytes, offset: int) -> tuple[int, ...]:
+    table = struct.unpack_from('<16b', data, offset)
     if table[0] != 0 or table[8] != 0 or any(table[9 + k] != -table[1 + k] for k in range(7)):
-        raise ValueError(f'no steering table at {address:#x} (wrong executable or region?)')
+        raise ValueError(f'no steering table at file offset {offset:#x} (wrong file or offset?)')
     return table
 
 
@@ -66,13 +63,13 @@ def pack_variant(entry: bytes, steer: tuple[int, ...], car_model: int) -> bytes:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('replay', type=Path, help='DRIVER\\REPLAYS\\REPLAY.BLK')
-    parser.add_argument('exe', type=Path, help='game executable (US, or European with --eu)')
+    parser.add_argument('data', type=Path, help='game data file that holds the steering table')
+    parser.add_argument('steer_offset', type=lambda s: int(s, 0), help='file offset of the 16 byte steering table in that file')
     parser.add_argument('missions', type=Path, help='DRIVER\\MISSIONS\\MISSION.BLK')
     parser.add_argument('converted', type=Path, help='<install>\\DRIVER1\\CONVERTED')
-    parser.add_argument('--eu', action='store_true', help='European executable')
     args = parser.parse_args()
 
-    steer = steer_table(args.exe.read_bytes(), STEER_TABLE_US + (EU_DATA_SHIFT if args.eu else 0))
+    steer = steer_table(args.data.read_bytes(), args.steer_offset)
     replay = args.replay.read_bytes()
     offsets = struct.unpack_from(f'<{ENTRIES}i', replay, 0)
     missions = d1mission.load(args.missions)

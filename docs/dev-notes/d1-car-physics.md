@@ -1,8 +1,6 @@
 # Driver 1 car physics in Redriver (2026-10-18)
 
-Descriptions only; the analysis and the captures stay outside the repo. Addresses are the US EXE unless marked EU (the European disc has
-the same code, functions after about `0x8005b000` sit `0x5ac` lower, the car step and the data of this note sit `0x14` higher in code
-and `0x5c4` lower in data).
+Descriptions only; the analysis and the captures stay outside the repo.
 
 ## Result in one line
 
@@ -11,23 +9,22 @@ The D2 car code (`StepOneCar`, `AddWheelForcesDriver1`, `GetFrictionScalesDriver
 3000 against 2048), plus a few D2 additions. Porting D1 handling therefore means: use the D1 sizes in D1 cities, and undo the few
 model differences listed below. No new physics code is needed.
 
-## Call chain (US EXE)
+## Call chain
 
-- Per frame `0x8001bac0` (= `GlobalTimeStep`): runs the queued car steps, then integrates and does car to car collisions in 4
+- Per frame `GlobalTimeStep`: runs the queued car steps, then integrates and does car to car collisions in 4
   sub steps of 2 RK passes, exactly like the D2 function (position += velocity / 256 in 1/16 units, quaternion update and
   renormalise, angular velocity clamp, a car below a small velocity sum is put to rest).
-- `0x8001d608` only queues a car (record pointer, "driven" flag); `0x8001d648` (= `StepCars`) runs `0x8001d6e4` (= `StepOneCar` +
-  `AddWheelForcesDriver1`, one function in D1) and then `0x8004c72c` (= `ControlCarRevs`, revs from the gear table through
-  `0x8004c610` = `GetEngineRevs`). `0x8001f490` = `ConvertTorqueToAngularAcceleration`. `0x8001eeb4` = surface lookup (returns the
-  friction factor: full on roads, half on grass, where it also adds the grass wobble).
-- Input: `0x8001ff24` (= `ControlCar`): digital steering in steps up to a lock, faster steering with a second bit, analogue steering
+- A first function only queues a car (record pointer, "driven" flag); `StepCars` runs `StepOneCar` + `AddWheelForcesDriver1` (one
+  function in D1) and then `ControlCarRevs` (revs from the gear table through `GetEngineRevs`). `ConvertTorqueToAngularAcceleration`
+  follows. A surface lookup returns the friction factor: full on roads, half on grass, where it also adds the grass wobble.
+- Input (`ControlCar`): digital steering in steps up to a lock, faster steering with a second bit, analogue steering
   as a cube of the stick, return to centre per frame; throttle, brake (constant forward, speed dependent when reversing), hand brake,
   burnout up to a wheel speed limit, gear change cuts the throttle.
-- Car record: stride `0x18c`, US base `0x9b0a4` (car 0 = player), EU `0x9aae0`. Offsets used here: `+0x18` position, `+0x24`
+- Car record: stride `0x18c` (car 0 = player). Offsets used here: `+0x18` position, `+0x24`
   fixed point position, `+0x30` quaternion, `+0x40` velocity, `+0x4c` angular velocity, `+0x58` acceleration, `+0x68` angular
   acceleration, `+0x78` four wheel bytes (compression, locked, on grass), `+0xf0` thrust, `+0xf4` wheel angle, `+0xf8` heading,
   `+0xfc` hand brake, `+0x100` burnout, `+0x104` wheel speed, `+0x108` speed, `+0x17e` auto brake counter, `+0x180` revs,
-  `+0x184` gear, `+0x185` changing gear. Wetness EU `0x96e60`, gear table EU `0x8a408` (US `0x8a9b4`).
+  `+0x184` gear, `+0x185` changing gear.
 
 ## The model (same structure in D1 and D2)
 
@@ -63,7 +60,7 @@ model differences listed below. No new physics code is needed.
 
 ## Validation against the captured D1 positions
 
-Captures (outside the repo): per frame the first 64 bytes of the player and the chased car record during a Pursuit run (EU disc).
+Captures (outside the repo): per frame the first 64 bytes of the player and the chased car record during a Pursuit run.
 Velocity is the fixed point position step times 256.
 
 - Integration (position step = velocity / 4096 per frame) is taken from the original code; the capture holds no velocity, so the
@@ -81,16 +78,16 @@ Velocity is the fixed point position step times 256.
   Fitted on the way: the chased car uses the 7000 throttle of the chase modes (not 7200), and the stream is one record ahead of
   the first captured frame. Full routes need the map heights (crests, kerbs) and the contacts with other cars.
 - With the D1 ground (road map heights, slope polygons and the grass wobble of the surface function, read from the own LEV) and
-  full record captures of the chased car (savestate, breakpoint at the EU force step), the offline re-implementation is bit
+  full record captures of the chased car, the offline re-implementation is bit
   exact per frame: control, forces, revs and integration. Two details needed for that: in the chase modes the chased car always
   has the "may be colliding" flag, so it integrates in 4 sub steps with 2 passes each; and the engine's own arc tangent table.
   An open loop run from one full state stays exact until the car touches something. From a capture with only position and
   rotation the first unit of error appears after 9 frames (unknown start state) and grows to the route scale after 400 frames.
 - From the start state alone (REPLAY.BLK start position and heading, ground height plus the creation offset, the creation
-  quaternion of `0x8001b720` with its small tilt, the creation wheel compressions, everything else zero) the full path of the
+  quaternion with its small tilt, the creation wheel compressions, everything else zero) the full path of the
   chased car is bit exact against two live Pursuit Miami 1 runs: 453 and 471 frames, up to the first contact with traffic (damage
   flag set, player far away). After that the error grows to the route scale within about 150 frames; the traffic is not simulated.
-- The chased car is driven by the pad stream only (`0x800230b0`): no distance logic. It brakes with the hand brake and straight
+- The chased car is driven by the pad stream only: no distance logic. It brakes with the hand brake and straight
   wheels when the mission ends (game over flag) or the frame count of the start state runs out, which explains the stop with an
   idle player (the mission was lost).
 - Apart from its input the chased car is an ordinary physics car, the same in every city: the same step, forces and integration
@@ -104,8 +101,8 @@ Velocity is the fixed point position step times 256.
   hits by the player car; traffic contacts only raise the damage of the hit zone, and world contacts give it no damage at all.
 - Pad pack: `src_rebuild/tools/d1conv/d1pads_pack.py` writes the pad stream, start state and chase car model (set by the
   mission script) of every variant to `M<1000 + script>.PADS` next to the `.CHASE` file; the format is in the script.
-- Not validated yet: lateral grip and roll (the capture has no pad input; needs a full record capture with known input, the
-  breakpoint at EU `0x8001d6f8` gives the record pointer in `a0`), brakes, car to car collisions.
+- Not validated yet: lateral grip and roll (the capture has no pad input; needs a full record capture with known input),
+  brakes, car to car collisions.
 
 ## Implemented (config.ini `[d1dlc] d1Handling`, default 1)
 
@@ -117,7 +114,7 @@ identical frame by frame with the option on and off).
 
 ## Next steps
 
-1. Full record capture with known input (accelerate, steer at lock, brake) on the EU disc, and the same script in Redriver: compare
+1. Full record capture with known input (accelerate, steer at lock, brake), and the same script in Redriver: compare
    lateral speed, yaw rate and roll per frame.
 2. Body contact as in D1 (all points, straight lift) in D1 cities, and the car to car constants of point 4 (they are D2 sized too).
 3. Traffic and cop cars in D1 cities keep the twist and power of their own cosmetics: give them the D1 neutral set as well.
