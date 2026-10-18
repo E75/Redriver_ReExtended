@@ -15,6 +15,7 @@
 #include "system.h"
 #include "cutscene.h"
 #include "denting.h"
+#include "d1chase.h"
 
 extern int gCameraBoxOverlap;
 
@@ -472,7 +473,7 @@ int DamageCar3D(CAR_DATA *cp, LONGVECTOR4* delta, int strikeVel, CAR_DATA *pOthe
 	}
 
 	// if cop cars colliding with themselves, only apply fake damage
-	fakeDamage = (cp->controlType == CONTROL_TYPE_PURSUER_AI && pOtherCar->controlType == CONTROL_TYPE_PURSUER_AI);
+	fakeDamage = (cp->controlType == CONTROL_TYPE_PURSUER_AI && pOtherCar->controlType == CONTROL_TYPE_PURSUER_AI) || !D1ChaseCar_DamageCounts(cp, pOtherCar);
 
 	ApplyDamage(cp, region, value, fakeDamage);
 #ifndef PSX
@@ -570,7 +571,7 @@ void DamageCar(CAR_DATA *cp, CDATA2D *cd, CRET2D *collisionResult, int strikeVel
 				value >>= 1;
 		}
 
-		ApplyDamage(cp, region, value, 0);
+		ApplyDamage(cp, region, value, !D1ChaseCar_DamageCounts(cp, NULL));
 #ifndef PSX
 		MirrorCentreDamage(cp, region, door, value);
 #endif

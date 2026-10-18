@@ -2,6 +2,7 @@
 #include "d1chase.h"
 #include "handling.h"
 #include "cosmetic.h"
+#include "pad.h"
 #include "system.h"
 
 #include <SDL.h>
@@ -22,9 +23,59 @@ typedef struct
 	short y, yaw;
 } D1CHASE_FRAME;
 
+#define D1CHASE_PADS_MAGIC	0x44503144		// "D1PD"
+#define D1CHASE_PADS_VERSION	1
+#define D1CHASE_THRUST	4779			// thrust of the chased car while the throttle is down
+
 static D1CHASE_FRAME* sFrames = NULL;
 static int sFrameCount = 0;
-static int sFrame = 0;
+static int sFrame = 0;			// route frames placed (no pad stream) or pad frames played (pad stream)
+static int sRouteOver = 0;
+static int sPlaced = 0;			// the car stood on route frame 0 once (the spawn spot is only near it)
+
+static unsigned char* sPads = NULL;		// per frame: uint16 pad, int8 steer
+static int sPadCount = 0;
+
+// pad stream of the same variant; optional, without it the route is followed by position only
+static void LoadPads(int missionNumber, int variants, int pick)
+{
+	char filename[64];
+	int head[3], offset, i;
+
+	sprintf(filename, "..\\DRIVER1\\CONVERTED\\M%d.PADS", missionNumber);
+	if (!FileExists(filename))
+		return;
+
+	LoadfileSeg(filename, (char*)head, 0, sizeof(head));
+	if (head[0] != D1CHASE_PADS_MAGIC || head[1] != D1CHASE_PADS_VERSION || head[2] != variants)
+		return;
+
+	offset = sizeof(head);
+
+	for (i = 0; i <= pick; i++)
+	{
+		int var[6];		// frames, start x y z, yaw, car model
+
+		LoadfileSeg(filename, (char*)var, offset, sizeof(var));
+		offset += sizeof(var);
+
+		if (var[0] < 1 || var[0] > 100000)
+			return;
+
+		if (i == pick)
+		{
+			sPads = (unsigned char*)malloc(var[0] * 3);
+			if (sPads == NULL)
+				return;
+
+			LoadfileSeg(filename, (char*)sPads, offset, var[0] * 3);
+			sPadCount = var[0];
+			printInfo("D1 chase pads: %d frames\n", sPadCount);
+		}
+
+		offset += var[0] * 3;
+	}
+}
 
 int D1ChasePath_Load(int missionNumber)
 {
@@ -33,9 +84,14 @@ int D1ChasePath_Load(int missionNumber)
 	int offset;
 
 	free(sFrames);
+	free(sPads);
 	sFrames = NULL;
+	sPads = NULL;
 	sFrameCount = 0;
+	sPadCount = 0;
 	sFrame = 0;
+	sRouteOver = 0;
+	sPlaced = 0;
 
 	if (!gD1ChasePaths)
 		return 0;
@@ -76,6 +132,7 @@ int D1ChasePath_Load(int missionNumber)
 		offset += count * sizeof(D1CHASE_FRAME);
 	}
 
+	LoadPads(missionNumber, variants, pick);
 	return 1;
 }
 
@@ -94,17 +151,13 @@ int D1ChasePath_Step(CAR_DATA* cp)
 	int dx, dz, dz4;
 	int sn, cs;
 
-	if (sFrames == NULL)
+	if (sFrames == NULL || sRouteOver)
 		return 0;
 
 	if (sFrame + 1 >= sFrameCount)
 	{
-		if (sFrame + 1 == sFrameCount)
-		{
-			printInfo("D1 chase route over after %d frames, civilian AI drives on\n", sFrame);
-			sFrame++;
-		}
-
+		printInfo("D1 chase route over after %d frames, %s drives on\n", sFrame, sPads ? "the pad stream" : "civilian AI");
+		sRouteOver = 1;
 		return 0;
 	}
 
@@ -112,7 +165,7 @@ int D1ChasePath_Step(CAR_DATA* cp)
 	next = &sFrames[sFrame + 1];
 
 	// the physics moved the car one step from the last recorded frame; without a contact that lands on this frame, a building
-	// pushes it back (the recorded route is only valid until the first contact), then the civilian AI drives on
+	// pushes it back (the recorded route is only valid until the first contact), then the pads (or civilian AI) drive on
 	if (sFrame > 0)
 	{
 		int offX = (cp->st.n.fposition[0] >> 4) - cur->x;
@@ -120,13 +173,16 @@ int D1ChasePath_Step(CAR_DATA* cp)
 
 		if (offX * offX + offZ * offZ > D1CHASE_CONTACT_DIST * D1CHASE_CONTACT_DIST)
 		{
-			printInfo("D1 chase route left after %d frames (off by %d %d), civilian AI drives on\n", sFrame, offX, offZ);
-			sFrame = sFrameCount;
+			printInfo("D1 chase route left after %d frames (off by %d %d), %s drives on\n", sFrame, offX, offZ, sPads ? "the pad stream" : "civilian AI");
+			sRouteOver = 1;
 			return 0;
 		}
 	}
 
-	sFrame++;
+	sPlaced = 1;
+
+	if (sPads == NULL)
+		sFrame++;
 
 	dx = next->x - cur->x;
 	dz = next->z - cur->z;
@@ -152,4 +208,48 @@ int D1ChasePath_Step(CAR_DATA* cp)
 
 	RebuildCarMatrix(&cp->st, cp);
 	return 1;
+}
+
+static int IsChaseCar(CAR_DATA* cp)
+{
+	return cp->inform != NULL && (*cp->inform & TARGET_FLAG_CAR_D1_CHASE);
+}
+
+int D1ChasePath_ProcessPad(CAR_DATA* cp)
+{
+	const unsigned char* rec;
+	u_int pad;
+
+	if (sPads == NULL || !IsChaseCar(cp))
+		return 0;
+
+	// no input before the first placement, or the step of the spawn frame would move the car off frame 0
+	if (!sPlaced)
+		return 1;
+
+	if (sFrame >= sPadCount)
+	{
+		cp->handbrake = 1;
+		cp->wheel_angle = 0;
+		return 1;
+	}
+
+	rec = &sPads[sFrame++ * 3];
+	pad = rec[0] | (rec[1] << 8);
+
+	// bit 0 marks a frame with analogue steering (the stick value may be 0)
+	ProcessCarPad(cp, pad & ~1u, (char)rec[2], pad & 1);
+
+	if ((pad & CAR_PAD_ACCEL) && !(pad & CAR_PAD_BRAKE) && cp->thrust > 1)
+		cp->thrust = D1CHASE_THRUST;
+
+	return 1;
+}
+
+int D1ChaseCar_DamageCounts(CAR_DATA* cp, CAR_DATA* other)
+{
+	if (!IsChaseCar(cp))
+		return 1;
+
+	return other != NULL && other->controlType == CONTROL_TYPE_PLAYER;
 }

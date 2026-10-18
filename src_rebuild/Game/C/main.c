@@ -31,6 +31,7 @@
 #include "map.h"
 #include "objanim.h"
 #include "handling.h"
+#include "d1chase.h"
 #include "drivinggames.h"
 #include "bomberman.h"
 #include "players.h"
@@ -1078,7 +1079,8 @@ void StepSim(void)
 				ProcessCarPad(cp, t0, t1, t2);
 				break;
 			case CONTROL_TYPE_CIV_AI:
-				CivControl(cp);
+				if (!D1ChasePath_ProcessPad(cp))
+					CivControl(cp);
 				break;
 			case CONTROL_TYPE_PURSUER_AI:
 				CopControl(cp);

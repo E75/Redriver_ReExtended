@@ -14,4 +14,11 @@ extern void D1ChasePath_Start(int* x, int* z, int* direction);
 // puts the car on the next recorded frame; false once the route is over (the civilian AI drives on from there)
 extern int D1ChasePath_Step(CAR_DATA* cp);
 
+// Driver 1 chase car driven by the recorded pad stream (M<n>.PADS, same variant as the route): feeds the pad to the
+// normal car control; false when this car is not the chase car or there is no stream (the civilian AI drives then)
+extern int D1ChasePath_ProcessPad(CAR_DATA* cp);
+
+// false when a hit on this car must not raise its damage total: the chased car only takes damage from the player's car
+extern int D1ChaseCar_DamageCounts(CAR_DATA* cp, CAR_DATA* other);
+
 #endif

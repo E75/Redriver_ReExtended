@@ -595,7 +595,7 @@ void AddWheelForcesDriver1(CAR_DATA* cp, CAR_LOCALS* cl)
 
 int gFlyingCar = 0;		// cheat, toggled with F8 or the debug menu
 int gInfiniteMass = 0;	// cheat, toggled with F6 or the debug menu (used in handling.c)
-int gD1ChaseInfiniteMass = 1;	// config.ini [d1dlc] chaseInfiniteMass: the chased car of a Driver 1 mission is never pushed off its path
+int gD1ChaseInfiniteMass = 0;	// config.ini [d1dlc] chaseInfiniteMass: the chased car of a Driver 1 mission is never pushed off its path
 int gSpeedBoost = 0;	// cheat (Fun Cheats menu): the horn pushes the player car forward
 int gFlyAscend = 0;		// held keys (left shift / left ctrl)
 int gFlyDescend = 0;
