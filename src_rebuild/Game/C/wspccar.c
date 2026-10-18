@@ -209,7 +209,7 @@ typedef struct
 
 #define WSPC_WHEEL_PERCENT	108		// drawn wheels are a little bigger than the wheel boxes of the source so that they fill the arches
 #define WSPC_REST_DROP		-10		// body height on the wheels (measured in the car spawner): the arches wrap the upper part of the wheels
-#define WSPC_HUB_OFFSET		8		// DrawCarWheels: wheel x = +-17 - wheelDisp.vx; the wheel model sticks out from there, so the hub sits a little inside the source wheel
+#define WSPC_HUB_OFFSET		18	// DrawCarWheels: wheel x = +-17 - wheelDisp.vx; the wheel model sticks out from there, so the hub sits a little inside the source wheel
 
 // the wheelN=x.. y.. z.. radius.. lines of CAR.INFO (model coordinates, the model is centred on its bounding box)
 static int ReadWheels(const char* info, WSPC_WHEEL* wheels)
@@ -297,7 +297,7 @@ static void FitWheelsAndLamps(const WSPC_WHEEL* wheels)
 	cos->cog.vz = 0;
 
 	height = maxY - minY;
-	lampY = minY + height * 45 / 100;
+	lampY = minY + height * 63 / 100;
 
 	cos->headLight.vx = maxX * 62 / 100;
 	cos->headLight.vy = lampY;
