@@ -128,6 +128,7 @@ def main() -> None:
     ap.add_argument('--views', default='front,side,rear')
     ap.add_argument('--sheet')
     ap.add_argument('--single', action='store_true')
+    ap.add_argument('--scale', type=float, default=1.0)
     ap.add_argument('cmd')
     ap.add_argument('args', nargs='*')
     a = ap.parse_args()
@@ -165,6 +166,8 @@ def main() -> None:
             for r, row in enumerate(rows):
                 for c, im in enumerate(row):
                     sheet.paste(im, (c * w, r * h))
+            if a.scale != 1.0:
+                sheet = sheet.resize((int(sheet.width * a.scale), int(sheet.height * a.scale)))
             sheet.save(a.out / a.sheet)
             print(a.out / a.sheet)
     else:
