@@ -76,7 +76,17 @@ int gCivSpawnFrame[MAX_CARS];	// frame a civilian car was pinged in: it fades in
 static int civStuckSteps[MAX_CARS];
 static int civBargeLeft[MAX_CARS];
 static int civReverseLeft[MAX_CARS];		// steps a stuck car still backs up
+static int civReverseSteer[MAX_CARS];		// wheel angle while it backs up
+static int civSwerveLeft[MAX_CARS];			// steps a car still drives round a standing car (CivTrySwerve)
+static int civSwerveX[MAX_CARS];			// world offset of its aim point while it goes round
+static int civSwerveZ[MAX_CARS];
+static int civSwerveCar[MAX_CARS];			// index of the car it goes round
+#define CIV_SWERVE_STEPS	150				// 5 s at most to get past
+#define CIV_SWERVE_FADE		30				// last steps: the aim point slides back to the lane
 unsigned char civCornerBrake[MAX_CARS];		// the mission code sets it every step for a chased car: it brakes for bends (CivCornerSpeed)
+int gSmartTraffic = 1;						// config.ini [ai] smartTraffic: 0 = traffic as before docs/dev-notes/smart-traffic-plan.md
+int gCivSwerveCount;							// test log: cars that went round a standing car
+int gCivStandSteps;							// test log: steps of driving cars in view standing still without a red light
 int gCivReverseCount;							// test log: reverse manoeuvres started
 int gCivNearContact;							// test log: steps a moving car had another car closer than half its length
 #endif
@@ -204,6 +214,7 @@ int InitCar(CAR_DATA* cp, int direction, LONGVECTOR4* startPos, unsigned char co
 	civStuckSteps[cp->id] = 0;
 	civBargeLeft[cp->id] = 0;
 	civReverseLeft[cp->id] = 0;
+	civSwerveLeft[cp->id] = 0;
 	civCornerBrake[cp->id] = 0;
 #endif
 
@@ -3197,6 +3208,7 @@ int CivAccelTrafficRules(CAR_DATA * cp, int* distToNode)
 
 int brakeLength[MAX_CARS];
 int brakeLeadSpeed[MAX_CARS];		// speed (units per step) of the car that sets brakeLength, along the own heading
+int brakeLeadCar[MAX_CARS];			// index + 1 of the car that sets brakeLength, 0 = none or Tanner
 
 #if defined(DEBUG_OPTIONS) && !defined(PSX)
 #include <stdlib.h>
@@ -3209,6 +3221,10 @@ static int OldFollow(void)	// test switch: REDRIVER2_OLDFOLLOW=1 gives the origi
 }
 #else
 #define OldFollow() 0
+#endif
+
+#ifndef PSX
+#define SmartTraffic() (gSmartTraffic && !OldFollow())
 #endif
 
 #ifndef PSX
@@ -3238,6 +3254,7 @@ void SetUpCivCollFlags(void)
 
 	ClearMem((char*)brakeLength, sizeof(brakeLength));
 	ClearMem((char*)brakeLeadSpeed, sizeof(brakeLeadSpeed));
+	ClearMem((char*)brakeLeadCar, sizeof(brakeLeadCar));
 
 	for (cp0 = &car_data[MAX_CARS - 1]; cp0 >= car_data; cp0--)
 	{
@@ -3351,6 +3368,7 @@ void SetUpCivCollFlags(void)
 #ifndef PSX
 				// the car ahead only counts as moving when it drives the same way (crossing or oncoming cars are obstacles)
 				brakeLeadSpeed[cp0->id] = (!isTanner && ABS(DIFF_ANGLES(cp0->hd.direction, cp1->hd.direction)) < 512) ? FIXEDH(cp1->hd.wheel_speed) : 0;
+				brakeLeadCar[cp0->id] = isTanner ? 0 : CAR_INDEX(cp1) + 1;
 
 				if (brake < cp0Length / 2 && FIXEDH(cp0->hd.wheel_speed) > 10)
 					gCivNearContact++;
@@ -3528,6 +3546,10 @@ int CivAccel(CAR_DATA * cp)
 			civBargeLeft[cp->id]--;
 			collDat = 0;
 		}
+
+		// going round a standing car: that car does not stop it, other cars still do
+		if (civSwerveLeft[cp->id] > 0 && brakeLeadCar[cp->id] == civSwerveCar[cp->id] + 1)
+			collDat = 0;
 #endif
 
 		lbody = cp->ap.carCos->colBox.vz;
@@ -3610,6 +3632,12 @@ int CivAccel(CAR_DATA * cp)
 				cp->ai.c.carPauseCnt -= 1;
 			}
 		}
+
+#ifndef PSX
+		// creep past the standing car
+		if (civSwerveLeft[cp->id] > 0 && FIXEDH(cp->hd.wheel_speed) > WorldSpeedLimit(0) / 2 && ret > -cp->hd.wheel_speed / 8)
+			ret = -cp->hd.wheel_speed / 8;
+#endif
 	}
 
 	return ret;
@@ -3824,6 +3852,16 @@ int CivSteerAngle(CAR_DATA* cp)
 					int ret;
 					int dx, dz;
 					CivFindPointOnPath(cp, station + FIXEDH(cp->hd.wheel_speed) * checkFrames + lbody, &pathPoint);
+
+#ifndef PSX
+					// going round a standing car: aim beside the lane, back to the lane over the last steps
+					if (civSwerveLeft[cp->id] > 0)
+					{
+						int fade = MIN(civSwerveLeft[cp->id], CIV_SWERVE_FADE);
+						pathPoint.vx += civSwerveX[cp->id] * fade / CIV_SWERVE_FADE;
+						pathPoint.vz += civSwerveZ[cp->id] * fade / CIV_SWERVE_FADE;
+					}
+#endif
 
 					dx = pathPoint.vx - cp->hd.where.t[0];
 					dz = pathPoint.vz - cp->hd.where.t[2];
@@ -4185,6 +4223,190 @@ static int CivClearBehind(CAR_DATA* cp)
 	return 1;
 }
 
+#define CIV_REVERSE_LENGTH		30		// steps a smart car backs up
+#define CIV_SWERVE_MARGIN		60		// room left between the cars when going round
+#define CIV_SWERVE_MAX_WIDTHS	6		// no detour wider than this many own half widths beside the lane
+#define CIV_SWERVE_PLAYER_WAIT	300		// a standing player car may wait at a light: 10 s before going round it
+#define CIV_SWERVE_RETRY		15		// steps between tries to find a way round
+#define CIV_SWERVE_GIVE_UP		45		// steps without moving while going round: give up, the next rung backs up
+#define CIV_SWERVE_OBJECT_STEPS	60		// going round a lamp post or a wall corner takes this long
+#define CIV_OBJECT_HALF			120		// assumed half size of an object the car ran into
+
+static int civSwerveStart[MAX_CARS];	// civStuckSteps when going round started
+
+// nothing at (x, z) a car could hit: no building or object and no other car (except the one it goes round) close by
+static int CivSpotFree(CAR_DATA* cp, CAR_DATA* ignore, int x, int z, int radius)
+{
+	VECTOR pos;
+
+	pos.vx = x;
+	pos.vy = cp->hd.where.t[1];
+	pos.vz = z;
+
+	if (!CellAtPositionEmpty(&pos, radius))
+		return 0;
+
+	for (CAR_DATA* other = car_data; other < &car_data[MAX_CARS]; other++)
+	{
+		int dx, dz;
+
+		if (other == cp || other == ignore || other->controlType == CONTROL_TYPE_NONE)
+			continue;
+
+		dx = other->hd.where.t[0] - x;
+		dz = other->hd.where.t[2] - z;
+
+		if (ABS(dx) < radius * 3 && ABS(dz) < radius * 3 && dx * dx + dz * dz < radius * radius * 9)
+			return 0;
+	}
+
+	return 1;
+}
+
+// the wait state is set long before the stop line, as soon as the route reaches a junction with lights
+static int CivWaitsForLight(CAR_DATA* cp)
+{
+	return cp->ai.c.ctrlState == CIV_AI_CTRL_WAIT_TRAFFIC_LIGHT && cp->ai.c.ctrlNode != NULL && cp->ai.c.ctrlNode->pathType != 127 &&
+		junctionLightsPhase[cp->ai.c.trafficLightPhaseId] != 3;
+}
+
+// a standing car in front that is not queuing or waiting at a light; face to face only the lower index acts,
+// else both would swerve into each other
+static CAR_DATA* CivStandingBlocker(CAR_DATA* cp)
+{
+	CAR_DATA* lead;
+
+	if (brakeLeadCar[cp->id] == 0)
+		return NULL;
+
+	lead = &car_data[brakeLeadCar[cp->id] - 1];
+
+	if (ABS(FIXEDH(lead->hd.wheel_speed)) >= 3 || lead->controlType == CONTROL_TYPE_NONE)
+		return NULL;
+
+	if (lead->controlType != CONTROL_TYPE_CIV_AI)
+		return lead;
+
+	if (ABS(DIFF_ANGLES(cp->hd.direction, lead->hd.direction)) > 1536)
+		return lead->id > cp->id ? lead : NULL;
+
+	if (brakeLength[lead->id] != 0 || lead->ai.c.carPauseCnt > 0 ||
+		CivWaitsForLight(lead) || lead->ai.c.ctrlState == CIV_AI_CTRL_STOP_AT_NODE ||
+		lead->ai.c.ctrlState == CIV_AI_CTRL_YIELD_TURN || lead->ai.c.ctrlState == CIV_AI_CTRL_YIELD_STRAIGHT)
+		return NULL;
+
+	return lead;
+}
+
+// smaller detour side first; oncoming cars both keep right so they pass each other instead of meeting again
+static int CivTrySwerve(CAR_DATA* cp, CAR_DATA* obstacle, int ox, int oz, int halfAcross, int halfAlong, int oncoming, int steps)
+{
+	int id = cp->id;
+	int fx = cp->hd.where.m[0][2], fz = cp->hd.where.m[2][2];
+	int rx = cp->hd.where.m[0][0], rz = cp->hd.where.m[2][0];
+	int dx = ox - cp->hd.where.t[0], dz = oz - cp->hd.where.t[2];
+	int along = FIXEDH(dx * fx + dz * fz);
+	int side = FIXEDH(dx * rx + dz * rz);
+	int ow = cp->ap.carCos->colBox.vx;
+	int past = along + halfAlong + cp->ap.carCos->colBox.vz;
+	int rightFirst = oncoming || side < 0;
+	int i;
+
+	for (i = 0; i < 2; i++)
+	{
+		int dir = ((i == 0) == rightFirst) ? 1 : -1;
+		int ofs = side + dir * (halfAcross + ow + CIV_SWERVE_MARGIN);
+		int bx = cp->hd.where.t[0] + FIXEDH(rx * ofs), bz = cp->hd.where.t[2] + FIXEDH(rz * ofs);
+
+		if (ABS(ofs) > ow * CIV_SWERVE_MAX_WIDTHS ||
+			!CivSpotFree(cp, obstacle, bx + FIXEDH(fx * along), bz + FIXEDH(fz * along), ow) ||
+			!CivSpotFree(cp, obstacle, bx + FIXEDH(fx * past), bz + FIXEDH(fz * past), ow))
+			continue;
+
+		civSwerveX[id] = FIXEDH(rx * ofs);
+		civSwerveZ[id] = FIXEDH(rz * ofs);
+		civSwerveCar[id] = obstacle ? CAR_INDEX(obstacle) : -1;
+		civSwerveLeft[id] = steps;
+		civSwerveStart[id] = civStuckSteps[id];
+		gCivSwerveCount++;
+		return 1;
+	}
+
+	return 0;
+}
+
+// while going round a car: once it is behind, the aim point slides back to the lane
+static void CivSwerveStep(CAR_DATA* cp)
+{
+	int id = cp->id;
+	CAR_DATA* ob;
+	int dx, dz;
+
+	if (civSwerveLeft[id] <= 0)
+		return;
+
+	civSwerveLeft[id]--;
+
+	if (civSwerveCar[id] < 0 || civSwerveLeft[id] <= CIV_SWERVE_FADE)
+		return;
+
+	ob = &car_data[civSwerveCar[id]];
+	dx = ob->hd.where.t[0] - cp->hd.where.t[0];
+	dz = ob->hd.where.t[2] - cp->hd.where.t[2];
+
+	if (ob->controlType == CONTROL_TYPE_NONE ||
+		FIXEDH(dx * cp->hd.where.m[0][2] + dz * cp->hd.where.m[2][2]) < -(ob->ap.carCos->colBox.vz + cp->ap.carCos->colBox.vz))
+		civSwerveLeft[id] = CIV_SWERVE_FADE;
+}
+
+// escalation for a stuck car: go round a standing car, else back off; the player's car gets 10 s since it may wait at a light
+static void CivJamLadder(CAR_DATA* cp)
+{
+	int id = cp->id;
+	int steps = civStuckSteps[id];
+	CAR_DATA* blocker = CivStandingBlocker(cp);
+
+	if (blocker)
+	{
+		CAR_COSMETICS* bc = blocker->ap.carCos;
+		int rel = DIFF_ANGLES(cp->hd.direction, blocker->hd.direction);
+		int oncoming = ABS(rel) > 1536;
+		int patience = blocker->controlType == CONTROL_TYPE_PLAYER ? CIV_SWERVE_PLAYER_WAIT : CIV_REVERSE_STEPS;
+		int across = FIXEDH(ABS(RCOS(rel)) * bc->colBox.vx + ABS(RSIN(rel)) * bc->colBox.vz);
+		int along = FIXEDH(ABS(RSIN(rel)) * bc->colBox.vx + ABS(RCOS(rel)) * bc->colBox.vz);
+
+		if (steps < patience || steps % CIV_SWERVE_RETRY != 0)
+			return;
+
+		if (CivTrySwerve(cp, blocker, blocker->hd.where.t[0], blocker->hd.where.t[2], across, along, oncoming, CIV_SWERVE_STEPS))
+			return;
+
+		if (oncoming && steps >= CIV_REVERSE_STEPS * 2 && CivClearBehind(cp))
+		{
+			civReverseLeft[id] = CIV_REVERSE_LENGTH;
+			gCivReverseCount++;
+		}
+		return;
+	}
+
+	if (brakeLength[id] != 0 || (steps != CIV_REVERSE_STEPS && steps != CIV_REVERSE_STEPS * 5 / 2 && steps != CIV_REVERSE_STEPS * 4) ||
+		!CivClearBehind(cp))
+		return;
+
+	{
+		int reach = cp->ap.carCos->colBox.vz + CIV_SWERVE_MARGIN;
+		int ox = cp->hd.where.t[0] + FIXEDH(cp->hd.where.m[0][2] * reach);
+		int oz = cp->hd.where.t[2] + FIXEDH(cp->hd.where.m[2][2] * reach);
+
+		// a negative count waits: going round starts when the car has backed off (CivControl)
+		if (CivTrySwerve(cp, NULL, ox, oz, CIV_OBJECT_HALF, CIV_OBJECT_HALF, 0, CIV_SWERVE_OBJECT_STEPS))
+			civSwerveLeft[id] = -civSwerveLeft[id];
+	}
+
+	civReverseLeft[id] = CIV_REVERSE_LENGTH;
+	gCivReverseCount++;
+}
+
 // [A] gridlock at crossings: a civilian car that stands still for no good reason (not a red light, not parked, not the car the
 // player left) gets going again. Out of view it is removed, in view it first yields no more and ignores the cars in front.
 // Confused cars (stop + empty) cannot be helped and are removed after the longer time even in view.
@@ -4195,19 +4417,28 @@ static void CivJamBreaker(CAR_DATA* cp)
 	int hopeless;
 
 	if ((cp->controlFlags & (CONTROL_FLAG_COP | CONTROL_FLAG_COP_SLEEPING | CONTROL_FLAG_PLAYER_LEFT)) || cp->inform != NULL ||
-		cp->ai.c.ctrlState == CIV_AI_CTRL_PARKED || cp->ai.c.ctrlState == CIV_AI_CTRL_WAIT_TRAFFIC_LIGHT ||
+		cp->ai.c.ctrlState == CIV_AI_CTRL_PARKED || (SmartTraffic() ? CivWaitsForLight(cp) : cp->ai.c.ctrlState == CIV_AI_CTRL_WAIT_TRAFFIC_LIGHT) ||
 		cp->ai.c.ctrlState == CIV_AI_CTRL_STOP_AT_NODE || cp->ai.c.ctrlState == CIV_AI_CTRL_DIED_WITH_MUSIC ||
 		cp->ai.c.carPauseCnt > 0 || ABS(FIXEDH(cp->hd.wheel_speed)) >= 3)
 	{
 		civStuckSteps[id] = 0;
+		civSwerveStart[id] = 0;
 		return;
 	}
 
 	civStuckSteps[id]++;
 	hopeless = (cp->ai.c.thrustState == CIV_AI_THRUST_STOP);
 
+	if (SmartTraffic())
+	{
+		if (civSwerveLeft[id] > 0 && civStuckSteps[id] - civSwerveStart[id] >= CIV_SWERVE_GIVE_UP)
+			civSwerveLeft[id] = 0;
+
+		if (!hopeless && cp->ai.c.thrustState == CIV_AI_THRUST_ACCELERATE && civSwerveLeft[id] == 0 && civReverseLeft[id] == 0)
+			CivJamLadder(cp);
+	}
 	// [A] stuck for 2 s (and again after 8 s) although it wants to drive and no car is in front: back up for 0.7 s, if free behind
-	if ((civStuckSteps[id] == CIV_REVERSE_STEPS || civStuckSteps[id] == CIV_REVERSE_STEPS * 4) && !hopeless &&
+	else if ((civStuckSteps[id] == CIV_REVERSE_STEPS || civStuckSteps[id] == CIV_REVERSE_STEPS * 4) && !hopeless &&
 		cp->ai.c.thrustState == CIV_AI_THRUST_ACCELERATE && brakeLength[id] == 0 && !OldFollow() && CivClearBehind(cp))
 	{
 		civReverseLeft[id] = 20;
@@ -4250,7 +4481,15 @@ int CivControl(CAR_DATA* cp)
 
 #ifndef PSX
 	if (cp->controlType == CONTROL_TYPE_CIV_AI)
+	{
 		CivJamBreaker(cp);
+		CivSwerveStep(cp);
+
+		if (ABS(FIXEDH(cp->hd.wheel_speed)) < 3 && cp->inform == NULL && !CivWaitsForLight(cp) &&
+			cp->ai.c.ctrlState != CIV_AI_CTRL_PARKED && cp->ai.c.ctrlState != CIV_AI_CTRL_EMPTY &&
+			PositionInViewCone(cp->hd.where.t[0], cp->hd.where.t[2], 100000))
+			gCivStandSteps++;
+	}
 #endif
 
 	if (cp->controlType == CONTROL_TYPE_CIV_AI)
@@ -4283,8 +4522,11 @@ int CivControl(CAR_DATA* cp)
 		if (civReverseLeft[cp->id] > 0 && !OldFollow())
 		{
 			civReverseLeft[cp->id]--;
-			steer = 0;
+			steer = SmartTraffic() ? -steer : 0;	// wheel against the wanted steer: the nose swings back towards the lane
 			thrust = -1000;
+
+			if (civReverseLeft[cp->id] == 0 && civSwerveLeft[cp->id] < 0)
+				civSwerveLeft[cp->id] = -civSwerveLeft[cp->id];
 		}
 #endif
 		cp->wheel_angle = steer;

@@ -1811,6 +1811,50 @@ void DrawGame(void)
 		ActivatePlayerPedestrian(&car_data[MainPlayer.playerCarId], NULL, 0, NULL, (PED_MODEL_TYPES)PlayerExitModel());
 	}
 
+	// REDRIVER2_JAMTEST: every 15 s the driving traffic car nearest the player with a car right behind it breaks down in its
+	// lane (test of the jam ladder)
+	if (getenv("REDRIVER2_JAMTEST") && FrameCnt % 450 == 300)
+	{
+		CAR_DATA* broken = NULL;
+		int best = 0x7fffffff, c, f;
+
+		for (c = 0; c < MAX_CARS; c++)
+		{
+			CAR_DATA* tc = &car_data[c];
+			int dx = tc->hd.where.t[0] - player[0].pos[0], dz = tc->hd.where.t[2] - player[0].pos[2];
+
+			if (tc->controlType != CONTROL_TYPE_CIV_AI || tc->inform != NULL || FIXEDH(tc->hd.wheel_speed) < 10 ||
+				(tc->ai.c.ctrlState != CIV_AI_CTRL_DRIVE && tc->ai.c.ctrlState != CIV_AI_CTRL_WAIT_TRAFFIC_LIGHT) ||
+				ABS(dx) >= 12000 || ABS(dz) >= 12000 || dx * dx + dz * dz >= best)
+				continue;
+
+			for (f = 0; f < MAX_CARS; f++)
+			{
+				CAR_DATA* fc = &car_data[f];
+				int fx = tc->hd.where.t[0] - fc->hd.where.t[0], fz = tc->hd.where.t[2] - fc->hd.where.t[2];
+				int along = FIXEDH(fx * RSIN(fc->hd.direction) + fz * RCOS(fc->hd.direction));
+				int side = FIXEDH(fx * RCOS(fc->hd.direction) - fz * RSIN(fc->hd.direction));
+
+				if (fc != tc && fc->controlType == CONTROL_TYPE_CIV_AI && ABS(fx) < 4000 && ABS(fz) < 4000 &&
+					along > 300 && along < 4000 && ABS(side) < 300 && ABS(DIFF_ANGLES(fc->hd.direction, tc->hd.direction)) < 256)
+					break;
+			}
+
+			if (f < MAX_CARS)
+			{
+				best = dx * dx + dz * dz;
+				broken = tc;
+			}
+		}
+
+		if (broken)
+		{
+			broken->ai.c.ctrlState = CIV_AI_CTRL_PARKED;
+			broken->ai.c.thrustState = CIV_AI_THRUST_STOP;
+			printInfo("jamtest: car %d broke down at %d %d\n", CAR_INDEX(broken), broken->hd.where.t[0], broken->hd.where.t[2]);
+		}
+	}
+
 	// REDRIVER2_DENT=<zone mask>: damage those zones of the player car at step 40 and dent it (test of the damage zones)
 	if (getenv("REDRIVER2_DENT") && FrameCnt == 40 && MainPlayer.playerType == PLAYER_TYPE_CAR)
 	{
@@ -2006,8 +2050,9 @@ void DrawGame(void)
 			gPingFail[0], gPingFail[1], gPingFail[2], gPingFail[3], gPingFail[4], gPingFail[5], gPingFail[6], gPingFail[7], gPingFail[8], gPingFail[9], gPingFail[10], gPingFail[11], gPingFail[12], gPingFail[13]);
 
 		extern int gPedPingFail[4];
-		extern int gCivReverseCount, gCivNearContact;
-		printInfo("shot: car following: reverse manoeuvres %d, near contacts %d\n", gCivReverseCount, gCivNearContact);
+		extern int gCivReverseCount, gCivNearContact, gCivSwerveCount, gCivStandSteps;
+		printInfo("shot: car following: reverse manoeuvres %d, near contacts %d, went round %d, standing steps %d\n", gCivReverseCount, gCivNearContact,
+			gCivSwerveCount, gCivStandSteps);
 
 		printInfo("shot: ped ping in results: spawned %d, no pavement %d, too close %d\n", gPedPingFail[0], gPedPingFail[1], gPedPingFail[2]);
 
