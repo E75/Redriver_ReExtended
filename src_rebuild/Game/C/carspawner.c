@@ -559,7 +559,7 @@ static void ExportTick(void)
 	char id[96], path[300];
 	int slot = SPECIAL_CAR_SLOT, comp[4], k;
 
-	if (++exportWait < 10)
+	if (++exportWait < 30)
 		return;
 
 	exportWait = 0;

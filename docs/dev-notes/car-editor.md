@@ -42,6 +42,18 @@ too, `--single` not), `radius`, and `shots <id>... --game <install> --out <dir> 
 game in the car showroom (`-carsdir <dir> -spawnid <id> -spawnangle <n> -lightson -shot 150`) and cuts out the car. The game reads the
 same folder (`CARS/` or `-carsdir`), so a fix is: shots, compare the lamp flares with the housings, nudge, shots again.
 
+## Exact lamp check (tools/careditor/careshots.py)
+
+`careshots.py --cars <dir> --out <dir> <id>...` renders the rear and the front of a car from the editor (orthographic, 2 pixels per
+unit, ruler in engine units, markers on top; needs Playwright + Edge and `npm run build`). Read the housing of a lamp off the ruler and
+fix the marker with `carapi.py set`. The check in the game is `carapi.py shots` (flares against housings). The cars of the older game
+borrow their lamp data and needed this; the original cars were already correct.
+
+## Using corrected cars in the game
+
+The game reads `CARS/<city>_<model>/car.json` next to the exe, or the folder of `-carsdir <dir>`. A folder without that file is not
+touched. The corrected files are derived from the game data and are not committed.
+
 ## Not done yet
 
 - Import: the game reading `car.json` (corrected lamps / wheels) instead of the built-in values.

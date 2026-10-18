@@ -445,7 +445,19 @@ resize();
 	renderer.render(scene, camera);
 })();
 
-window.careditor = { store, get cur() { return cur; }, select, markers: () => markers, setView, addCar, fillList };
+// for scripts (carshots.py): an orthographic view, 1 unit = 1 pixel on a 1000 x 1000 canvas, centred on (0, y, 0)
+function orthoShot(name, y) {
+	$('optOrtho').checked = true;
+	useCamera(ortho);
+	orbit.target.set(0, y, 0);
+	setView(name);
+	ortho.zoom = 1;
+	ortho.updateProjectionMatrix();
+	orbit.update();
+	renderer.render(scene, camera);
+}
+
+window.careditor = { store, get cur() { return cur; }, select, markers: () => markers, setView, addCar, fillList, orthoShot, loadCar };
 </script>
 </body>
 </html>
