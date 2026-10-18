@@ -228,17 +228,18 @@ std::vector<char> BuildModel(const CarData& car, const std::vector<std::pair<int
 	{
 		const Material& mat = car.materials[poly.material];
 		bool tri = poly.idx.size() == 3;
-		static const int quadOrder[4] = { 0, 1, 3, 2 };
+		static const int quadOrder[4] = { 0, 2, 3, 1 };	// round the edge, reversed: the engine culls polygons that turn the other way round on screen
+		static const int triOrder[3] = { 0, 2, 1 };
 
 		uint8_t head[8] = { (uint8_t)(tri ? POLY_FT3 : POLY_FT4), (uint8_t)textureOf[poly.material].first, (uint8_t)textureOf[poly.material].second, 0, 0, 0, 0, 0 };
 		int n = tri ? 3 : 4;
 		for (int k = 0; k < n; k++)
-			head[4 + k] = (uint8_t)poly.idx[tri ? k : quadOrder[k]];
+			head[4 + k] = (uint8_t)poly.idx[tri ? triOrder[k] : quadOrder[k]];
 
 		Put(polyBytes, head, 8);
 		for (int k = 0; k < n; k++)
 		{
-			int src = tri ? k : quadOrder[k];
+			int src = tri ? triOrder[k] : quadOrder[k];
 			Put(polyBytes, &mat.uv[src][0], 1);
 			Put(polyBytes, &mat.uv[src][1], 1);
 		}
@@ -255,7 +256,7 @@ std::vector<char> BuildModel(const CarData& car, const std::vector<std::pair<int
 		const Vec& a = car.verts[poly.idx[0]];
 		const Vec& b = car.verts[poly.idx[1]];
 		const Vec& c = car.verts[poly.idx[2]];
-		double ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z, vx = c.x - a.x, vy = c.y - a.y, vz = c.z - a.z;
+		double vx = b.x - a.x, vy = b.y - a.y, vz = b.z - a.z, ux = c.x - a.x, uy = c.y - a.y, uz = c.z - a.z;
 		double nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
 
 		int16_t unit[3];
@@ -403,7 +404,7 @@ bool Wspc_ConvertCar(const char* dobPath, const char* outFolder, std::string& lo
 		int firstVert = (int)car.verts.size(), materialBase = (int)car.materials.size();
 		car.materials.insert(car.materials.end(), mesh.materials.begin(), mesh.materials.end());
 		for (auto& v : mesh.verts)
-			car.verts.push_back({ Round((v[0] + nodes[number].pos[0]) * WSPCDLC_CAR_SCALE), Round((v[1] + nodes[number].pos[1]) * WSPCDLC_CAR_SCALE), Round((v[2] + nodes[number].pos[2]) * WSPCDLC_CAR_SCALE) });
+			car.verts.push_back({ Round(-(v[0] + nodes[number].pos[0]) * WSPCDLC_CAR_SCALE), Round((v[1] + nodes[number].pos[1]) * WSPCDLC_CAR_SCALE), Round(-(v[2] + nodes[number].pos[2]) * WSPCDLC_CAR_SCALE) });
 
 		for (const Prim& prim : mesh.prims)
 		{
@@ -585,7 +586,7 @@ bool Wspc_ConvertCar(const char* dobPath, const char* outFolder, std::string& lo
 			}
 		}
 
-		wheelInfo.push_back({ Round((wlo[0] + whi[0]) / 2) - centre[0], Round((wlo[1] + whi[1]) / 2) - centre[1], Round((wlo[2] + whi[2]) / 2) - centre[2], Round((whi[1] - wlo[1]) / 2) });
+		wheelInfo.push_back({ Round(-(wlo[0] + whi[0]) / 2) - centre[0], Round((wlo[1] + whi[1]) / 2) - centre[1], Round(-(wlo[2] + whi[2]) / 2) - centre[2], Round((whi[1] - wlo[1]) / 2) });
 	}
 
 	std::string info;

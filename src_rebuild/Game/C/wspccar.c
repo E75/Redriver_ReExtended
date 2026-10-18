@@ -208,8 +208,8 @@ typedef struct
 } WSPC_WHEEL;
 
 #define WSPC_WHEEL_PERCENT	108		// drawn wheels are a little bigger than the wheel boxes of the source so that they fill the arches
-#define WSPC_REST_DROP		57		// the springs of a car at rest are compressed: the body sits this much lower than the wheel height of the formula (measured)
-#define WSPC_HUB_OFFSET		-3		// DrawCarWheels: wheel x = +-17 - wheelDisp.vx; the wheel model sticks out from there, so the hub goes in a little
+#define WSPC_REST_DROP		-10		// body height on the wheels (measured in the car spawner): the arches wrap the upper part of the wheels
+#define WSPC_HUB_OFFSET		8		// DrawCarWheels: wheel x = +-17 - wheelDisp.vx; the wheel model sticks out from there, so the hub sits a little inside the source wheel
 
 // the wheelN=x.. y.. z.. radius.. lines of CAR.INFO (model coordinates, the model is centred on its bounding box)
 static int ReadWheels(const char* info, WSPC_WHEEL* wheels)
@@ -258,7 +258,7 @@ static void FitWheelsAndLamps(const WSPC_WHEEL* wheels)
 	for (j = 0; j < 4; j++)
 	{
 		// wheel 0 and 1: left (-x) front and rear, 2 and 3: right front and rear
-		slot = (wheels[j].x > 0 ? 2 : 0) + (wheels[j].z > 0 ? 0 : 1);
+		slot = (wheels[j].x > 0 ? 2 : 0) + (wheels[j].z < 0 ? 0 : 1);
 
 		gD1WheelVisual[SPECIAL_CAR_SLOT][slot].vx = (slot < 2 ? WSPC_HUB_OFFSET : -WSPC_HUB_OFFSET) - wheels[j].x;
 		gD1WheelVisual[SPECIAL_CAR_SLOT][slot].vz = -wheels[j].z;
@@ -301,23 +301,23 @@ static void FitWheelsAndLamps(const WSPC_WHEEL* wheels)
 
 	cos->headLight.vx = maxX * 62 / 100;
 	cos->headLight.vy = lampY;
-	cos->headLight.vz = maxZ - 4;
+	cos->headLight.vz = -(maxZ - 4);
 
 	cos->frontInd.vx = maxX * 80 / 100;
 	cos->frontInd.vy = lampY + 6;
-	cos->frontInd.vz = maxZ - 4;
+	cos->frontInd.vz = -(maxZ - 4);
 
 	cos->backInd.vx = maxX * 80 / 100;
 	cos->backInd.vy = lampY;
-	cos->backInd.vz = -(maxZ - 4);
+	cos->backInd.vz = maxZ - 4;
 
 	cos->brakeLight.vx = maxX * 62 / 100;
 	cos->brakeLight.vy = lampY;
-	cos->brakeLight.vz = -(maxZ - 4);
+	cos->brakeLight.vz = maxZ - 4;
 
 	cos->revLight.vx = maxX * 45 / 100;
 	cos->revLight.vy = lampY + 6;
-	cos->revLight.vz = -(maxZ - 4);
+	cos->revLight.vz = maxZ - 4;
 
 	cos->policeLight.vx = 0;
 	cos->policeLight.vy = minY;
@@ -325,12 +325,12 @@ static void FitWheelsAndLamps(const WSPC_WHEEL* wheels)
 
 	cos->exhaust.vx = maxX * 45 / 100;
 	cos->exhaust.vy = maxY - 8;
-	cos->exhaust.vz = -maxZ;
+	cos->exhaust.vz = maxZ;
 	cos->smoke = cos->exhaust;
 
 	cos->fire.vx = 0;
 	cos->fire.vy = minY + height * 30 / 100;
-	cos->fire.vz = maxZ / 2;
+	cos->fire.vz = -maxZ / 2;
 }
 
 int WspcCar_LoadIntoSlot(int car)

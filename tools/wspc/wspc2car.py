@@ -77,7 +77,7 @@ def collect(data: bytes, pool: int, nodes: list[dob.Node], wanted: tuple[int, ..
         material_base = len(materials)
         materials.extend(node_materials)
         px, py, pz = node.position
-        verts.extend((rnd((x + px) * scale), rnd((y + py) * scale), rnd((z + pz) * scale)) for x, y, z in node_verts)
+        verts.extend((rnd(-(x + px) * scale), rnd((y + py) * scale), rnd(-(z + pz) * scale)) for x, y, z in node_verts)   # turned half a circle: the engine's front is -z, the source's +z
         for prim in prims:
             if prim.material < len(node_materials) and all(i < len(node_verts) for i in prim.indices):
                 colour = tuple(sum(c[k] for c in prim.colours) // len(prim.colours) for k in range(3))
@@ -97,16 +97,16 @@ def build_model(verts, polys, texture_of, kind: str) -> bytes:
     for indices, material, colour in polys:
         page, palette, uv = texture_of(material)
         if len(indices) == 3:
-            order = (0, 1, 2)
-            poly_bytes += struct.pack('<4B3BB', POLY_FT3, page, palette, 0, indices[0], indices[1], indices[2], 0)
+            order = (0, 2, 1)   # the engine culls polygons that turn the other way round on screen
+            poly_bytes += struct.pack('<4B3BB', POLY_FT3, page, palette, 0, indices[order[0]], indices[order[1]], indices[order[2]], 0)
             poly_bytes += bytes(sum(([uv[k][0], uv[k][1]] for k in order), [])) + b'\0\0'
         else:
-            order = (0, 1, 3, 2)   # source quads are strips, Redriver quads go round the edge
+            order = (0, 2, 3, 1)   # source quads are strips, Redriver quads go round the edge (reversed, see above)
             poly_bytes += struct.pack('<4B4B', POLY_FT4, page, palette, 0, *(indices[k] for k in order))
             poly_bytes += bytes(sum(([uv[k][0], uv[k][1]] for k in order), []))
         poly_bytes += bytes((*colour, 0))
         a, b, c = (verts[i] for i in indices[:3])
-        normal = cross(sub(b, a), sub(c, a))
+        normal = cross(sub(c, a), sub(b, a))
         face_normals += struct.pack('<4h', *unit(normal), 0)
         for i in indices:
             point_sum[i] = tuple(p + n for p, n in zip(point_sum[i], normal))
@@ -182,7 +182,7 @@ def convert(source: Path, out: Path, body: tuple[int, ...] | None, wheels: tuple
         node_verts, _, _ = dob.read_mesh(data, pool, nodes[number].pool_offset)
         px, py, pz = nodes[number].position
         xs, ys, zs = ([(v[k] + p) * scale for v in node_verts] for k, p in enumerate((px, py, pz)))
-        wheel_centres.append((rnd((min(xs) + max(xs)) / 2) - centre[0], rnd((min(ys) + max(ys)) / 2) - centre[1], rnd((min(zs) + max(zs)) / 2) - centre[2], rnd((max(ys) - min(ys)) / 2)))
+        wheel_centres.append((rnd(-(min(xs) + max(xs)) / 2) - centre[0], rnd((min(ys) + max(ys)) / 2) - centre[1], rnd(-(min(zs) + max(zs)) / 2) - centre[2], rnd((max(ys) - min(ys)) / 2)))
     lines = [f'vertices={len(verts)}', f'polys={len(polys)}', f'pages={len({p for p, _ in used})}', f'palettes={len(used)}',
              f'bounds={[min(v[k] for v in verts) for k in range(3)]}..{[max(v[k] for v in verts) for k in range(3)]}']
     lines += [f'wheel{i}=x{w[0]} y{w[1]} z{w[2]} radius{w[3]}' for i, w in enumerate(wheel_centres)]

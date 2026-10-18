@@ -8,7 +8,7 @@
 #define WSPCDLC_DATA_FOLDER			"WSPC\\"
 #define WSPCDLC_VEHICLES_FOLDER		"WSPC\\VEHICLES\\"
 #define WSPCDLC_CONVERTED_FOLDER	"WSPC\\CONVERTED\\"
-#define WSPCDLC_CONVERTER_VERSION	4	// bump when the output format changes -> forces reconversion
+#define WSPCDLC_CONVERTER_VERSION	7	// bump when the output format changes -> forces reconversion
 #define WSPCDLC_CAR_SCALE			0.55	// source units to Redriver units: a Redriver car is about 750 units long (half length 375)
 
 // Redriver driving behaviour that fits a WSPC car best; the table is in wspc_cars.cpp
