@@ -50,7 +50,7 @@ VAR_MAX_COP_CARS = 0x2000103
 # (104 + vars 59/60/61 = ambient sound chatter, 92 = far range of a target, only read by the arrival gates
 # that the converter refuses anyway)
 # 88 = state hand-over to the next story mission; the missions here are standalone
-IGNORED_OPS = {10, 11, 24, 28, 30, 31, 48, 51, 64, 67, 68, 88, 92, 104}
+IGNORED_OPS = {10, 11, 20, 24, 28, 30, 31, 48, 51, 64, 67, 68, 88, 92, 104}
 # SETVAR targets the D2 mission logic does not use here (var 15 = cop timing, D2 has its own); reported
 IGNORED_VARS = {8, 9, 14, 15, 16, 28, 45, 47, 48, 49, 50, 52, 59, 60, 61, 69, 70}
 # passenger scene (pedestrians walk to or from the car, short camera): the plan decides to skip it

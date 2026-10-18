@@ -273,7 +273,7 @@ const int kNoGettingFarMessage = 255;
 const double kPi = 3.14159265358979323846;
 
 // records the D2 mission logic has no counterpart for (cosmetic, HUD, unused tuning, hand-over to the next story mission)
-const int kIgnoredOps[] = { 10, 11, 24, 28, 30, 31, 48, 51, 64, 67, 68, 88, 92, 104 };
+const int kIgnoredOps[] = { 10, 11, 20, 24, 28, 30, 31, 48, 51, 64, 67, 68, 88, 92, 104 };		// 20 = SpawnCops (cop ambush spots, D2 cops spawn from the felony)
 const int kIgnoredVars[] = { 8, 9, 14, 15, 16, 28, 45, 47, 48, 49, 50, 52, 59, 60, 61, 69, 70 };
 // passenger scene: pedestrians walk to or from the car, short camera. Skipped by design.
 const int kSceneOps[] = { 74, 77, 78, 80, 82, 83, 112 };
