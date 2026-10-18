@@ -1,71 +1,48 @@
-# Driver 1 missions: PC script Rosetta stone (2026-10-18)
+# Driver 1 missions: PC mission scripts as a reference (2026-10-18)
 
-Research note. The Driver 1 PC version (`Game.exe`, 1999) keeps every mission as a plain text script `Scripts\Missions\missionN.dms` (165 files, comments included, named commands). The PS1 `MISSION.BLK` holds the same missions as anonymous opcodes. Use the PC scripts to name and understand the PS1 opcodes. No PC data is stored in the repo.
+Research note. The PC release of the DLC game keeps every mission as a plain text script `Scripts\Missions\missionN.dms` (165 files, comments included, named commands). The console `MISSION.BLK` holds the same missions as anonymous opcodes. The PC scripts help to name and understand those opcodes. No PC data is stored in the repo.
 
 ## Mapping story missions
 
-- PS1 story mission k (0..43) = PC `mission(k+1).dms` (checked by the draft header titles, e.g. PC 27 "Lucky to the Doc" = PS1 26, PC 44 "President Run" = PS1 43).
-- PC 45..49 Survival / Take a Ride, 59..63 + 91..94 Trail Blazer, 66..69 + 87..90 Getaway, 80..86 Survival, 95..101 Pursuit: the PS1 scripts 44..123 (other modes).
+- Console story mission k (0..43) = PC `mission(k+1).dms` (checked by the draft header titles, e.g. PC 27 "Lucky to the Doc" = 26, PC 44 "President Run" = 43).
+- PC 45..49 Survival / Take a Ride, 59..63 + 91..94 Trail Blazer, 66..69 + 87..90 Getaway, 80..86 Survival, 95..101 Pursuit: the console scripts 44..123 (other modes).
 
-## Coordinates: PC maps are NOT the PS1 maps
+## Coordinates: the PC maps are NOT the converted maps
 
-Target and start positions were compared per story mission (PS1 `TARGET0` / `START_POS` against PC `SetTarget` / `SetPlayerPosition`):
+Target and start positions were compared per story mission (`TARGET0` / `START_POS` against PC `SetTarget` / `SetPlayerPosition`):
 
-- Miami: PC positions are shifted by about (-9000, +9000) (already visible in the first mission). Targets differ too.
+- Miami: PC positions are shifted by about (-9000, +9000), visible in the first mission already. Targets differ too.
 - Los Angeles: totally different (start positions are far apart).
 - San Francisco and New York: start positions equal in most missions, targets equal in about a third.
-- The converted cities are built from the PS1 LEVs. Therefore: take behaviour, texts and rules from the PC scripts, but ALWAYS keep the PS1 positions. A PC position in a PS1 city can land off the road.
+- The converted cities are built from the console level files. Therefore: take behaviour, texts and rules from the PC scripts, but ALWAYS keep the converted positions. A PC position in a converted city can land off the road.
 
 ## Opcode meanings found through the PC scripts
 
-| PS1 op | PC command | Evidence |
+| Op | PC command | Evidence |
 |---|---|---|
-| 20 `TEST_POSITIONS [n, (rot,x,z)*n]` | `SpawnCops n, rot,x,z ...` | PC `SpawnCops n, rot,x,z ...` has the same count and triplet layout as the PS1 record of mission 16, with nearly equal positions. Cop car spawn spots (ambush); safe to ignore, D2 cops spawn from the felony value. Blocks missions 16, 31, 38. |
-| 39 `CFG_GP101C` | probably `CHOPPER` set-up | in PS1 19 and 43 whose PC scripts (20, 44) are the helicopter missions (`CHOPPER x,z,rot`, `CHOPPER_START`, `CHOPPER_FORCE`). Unverified for 43. |
-| 102 `WAIT_SPAWN` | `CreateGangCar 8192` (+ `DisableTargetArrow/Pulse/Tracer`) | PS1 39 against PC 40 (Stop Granger's Gang). Plausible, not proven. |
-| 65 `DAMAGE_LIMIT [2500]` | unknown | PS1 34 against PC 35 has no matching command (PC has `CopWipeOutDamage`, `DamageScale`). Open. |
-| 103 `MARKER_PROPS`, 40, 63, 4 `TRIGGER3` | not matched yet | PS1 2, 3, 18, 30 against PC 3, 4, 19, 31. PC 4 (boat chase) has no D2 equivalent (speed boat). |
+| 20 `TEST_POSITIONS [n, (rot,x,z)*n]` | `SpawnCops n, rot,x,z ...` | Same count and triplet layout as the record of mission 16, with nearly equal positions. Cop car spawn spots (ambush); safe to ignore, D2 cops spawn from the felony value. Blocks missions 16, 31, 38. |
+| 39 `CFG_GP101C` | probably `CHOPPER` set-up | In missions 19 and 43 whose PC scripts (20, 44) are the helicopter missions (`CHOPPER x,z,rot`, `CHOPPER_START`, `CHOPPER_FORCE`). Unverified for 43. |
+| 102 `WAIT_SPAWN` | `CreateGangCar 8192` (+ `DisableTargetArrow/Pulse/Tracer`) | Mission 39 against PC 40 (Stop Granger's Gang). Plausible, not proven. |
+| 65 `DAMAGE_LIMIT [2500]` | unknown | Mission 34 against PC 35 has no matching command (PC has `CopWipeOutDamage`, `DamageScale`). Open. |
+| 103 `MARKER_PROPS`, 40, 63, 4 `TRIGGER3` | not matched yet | Missions 2, 3, 18, 30 against PC 3, 4, 19, 31. PC 4 (boat chase) has no D2 equivalent (speed boat). |
 
 Other PC commands usable for exact rules: `Cop_Respawn n`, `Cops_SpeedScale` / `Cops_PowerScale`, `MustBeHidden` / `NeedToLoseTail` / `OuterRadius` (lose-the-tail rule), `ForceFelonyRating`, `Countdown`, `MaxSpeed`, `Night` / `Dusk` / `Dawn` / `Raining` / `Foggy` / `Lightning` / `Snowing` (time of day and weather per mission), `CreateGangCar`, `AddCivCar model,?,colour,?,rot,x,z`.
 
-## Beta PS1 build (D:\driver march 9th 99, DRIVER.EXE 9 March 1999)
+Time of day and weather: `d1mission_to_d2ms.py --pc-scripts <Scripts\Missions>` sets the D2MS header `time` (Night > Dusk > Dawn, else day) and `weather` (Raining) from PC `mission(k+1).dms`. Snowing, Foggy and Lightning have no header field and are only noted.
 
-- No debug symbols. The 85 `missions\N\mN.cdm` files use an older record layout than `MISSION.BLK` (string variable records carry no length, other lengths differ); only 6 of 70 parse with the final tables. The interpreter must be read in Ghidra first. Strings in the EXE: `DMS_COM_INCREASE/DECREASE/ADD/SUB: DMS variable %d not yet working`.
+## PC graphics findings
 
-## PC graphics findings (Game.exe, Ghidra, `D:\Driver-project\ghidra`)
-
-- Renderer = DirectDraw/Direct3D 6 plus a Glide 2.x path. `SetRenderState` init at `0x421521`: Z buffer on, Gouraud, texture mag/min POINT, dither, no culling, 16-bit 256x256 pages. So the PC version has no better filtering than PS1; its richer look comes from data (`Levels\*.d3d`, `*.cos`, `*.den`) and script features (weather, night, lamps, lens flare, chopper, `REFLECT.BMP`).
-- Redriver is the modern side: the wanted upgrades (fog, reflections, draw distance) are done in the Redriver renderer (PsyCross / OpenGL), using the PC data as reference for look and values, not by porting the DX6 code.
-- Redriver already has what the user wants modernised (checked 2026-10-18 in `draw.c` / `cars.c` / `debris.c`): shader fog (`PsyX_SetFog`, distance haze `gDistanceFog`, exponential weather fog, height fog and sun glow `gAtmosphere`), draw distance modes (`gDrawDistanceMode`, `ViewDrawDistance`, ring based `DrawRadiusOfCells`), sky gloss on car bodies (`CAR_GLOSS_SKY`), wet road lamp reflections (`DisplayLightReflections`), headlight beam. The DX6 path (point sampling, fixed 256x256 pages, Glide fog table) is behind that, so there is nothing to port.
-- What the PC data can still add: per-mission time of day and weather from the scripts (`Night`, `Dusk`, `Dawn`, `Raining`, `Foggy`, `Lightning`, `Snowing`, `NoLensFlare`), the `REFLECT.BMP` car environment map as a texture for the existing gloss, and lamp / lens flare placement (`LampPosition`, `LampColor`, `LampRange`). Tune fog and draw distance for the larger D1 cities (cell scale `MAP_CELL_SIZE / 2048`) instead.
-
-## Next steps (not done)
-
-1. Ignore op 20 with a note and re-run the converter to see which blockers remain (it only reports the first blocker per mission).
-2. Decode 39, 65, 102 with a Ghidra pass over the PC script parser (command name table) instead of guessing.
-3. ~~Take weather / time of day per mission from the PC scripts into the D2MS header~~ done: `d1mission_to_d2ms.py --pc-scripts <Scripts\Missions>` sets `time` (Night > Dusk > Dawn, else day) and `weather` (Raining) from PC `mission(k+1).dms`; Snowing, Foggy and Lightning have no header field and are only noted.
-
-### Corrections and fog facts (2026-10-18, Game.exe)
-
-- `DATA\REFLECT.BMP` is NOT a car environment map: it is a 640x480 splash image (Reflections logo) loaded by the start-up screen function at `0x4127f0` next to `COPYRIGHT.BMP` and `GT.BMP`. The PC `Shiny Cars` option (Readme: environment mapping nearly doubles the car polygon count) is a geometry pass, not a texture file. The existing sky gloss on car bodies is the equivalent; no env-map texture to import.
-- Fog exists only on the Glide path (Readme: visible in some undercover missions, option `Fog`). The table is built at `0x42626e`: exponential fog (`guFogGenerateExp`) with density 1.2e-4, or 1.0e-4 once a script flag (`DAT_00b87e88`) was raised; fog colour is a run-time value, black on the first call. Script `Foggy` is commented out in all but a few missions. Redriver's fog scales with draw distance and D1 cell size already; there are no PC values worth copying.
-- Script keywords live in a table of 16 byte headers (flag, id, argument bytes) in front of 0x110 byte name slots (`NIGHT`, `RAINING`, `LIGHTNING`, `FOGGY`, `NOLENSFLARE`, `LAMPPOSITION/COLOR/TYPE/RANGE`, `SNOWING`, `DUSK`, `DAWN`); the ids in that table do not equal the switch index of the script compiler at `0x4f6b..`, so the keyword to handler mapping is not resolved.
+- The PC renderer is a plain fixed function pipeline (Z buffer, Gouraud, point sampled textures, 16 bit 256x256 pages, a second path with table fog). It has no better filtering than the console version; its richer look comes from data (`Levels\*.d3d`, `*.cos`, `*.den`) and script features (weather, night, lamps, lens flare, chopper).
+- Redriver already covers the wanted upgrades in its own renderer (PsyCross / OpenGL): shader fog (`PsyX_SetFog`, distance haze `gDistanceFog`, exponential weather fog, height fog and sun glow `gAtmosphere`), draw distance modes (`gDrawDistanceMode`, `ViewDrawDistance`, ring based `DrawRadiusOfCells`), sky gloss on car bodies, wet road lamp reflections (`DisplayLightReflections`), headlight beam. Nothing of the PC renderer needs porting; tune fog and draw distance for the larger D1 cities (cell scale `MAP_CELL_SIZE / 2048`).
+- `DATA\REFLECT.BMP` is not a car environment map but a 640x480 start-up splash image. The PC option `Shiny Cars` (environment mapping nearly doubles the car polygon count) is an extra geometry pass; the car gloss pass of Redriver is the equivalent.
+- Fog exists only on the second render path (option `Fog`, visible in a few missions): exponential fog with a density of about 1.2e-4 (1.0e-4 after a script flag), run-time colour. The `Foggy` command is commented out in nearly all missions.
 - `Lamp*` commands occur in one mission (4 lamps, type 2, range 3000, red/blue = police light placement); `NoLensFlare` in 29 scripts (day missions without sun glare).
 
-## Chase replay format (REPLAY.BLK, retail US exe, 2026-10-18)
+## Chase replay data (`REPLAY.BLK`)
 
-Descriptions only; the analysis files live outside the repo.
+Description of the format only.
 
-- Loader: function at `0x8005c318` (mission number -> group through the byte table at `0x8008b6d8`, entry = group * 20 + variant, variant random 0..14 and never twice in a row; state 8 always variant 0). It reads one 5220 byte entry into the replay buffer that starts at RAM `0x1fc32c`; the buffer is split by the stream set-up at `0x80058814`.
-- Entry layout (offsets inside the 5220 bytes): `0..3000` pad stream (1000 records of 3 bytes: byte 0 high pad byte, byte 1 low pad byte, byte 2 repeat count; word = (b0 << 8 | b1) AND `0xa0fc`; low nibble of b0 selects the steering value from the byte table at `0x8008b6c8`), `3000..4600` traffic ping block, `4600..4620` start state (int frame count, int x, y, z, short rotation, short flags), `4620..5220` more tables. Entries of the same group share the start state, only the pad stream and frame count differ.
-- The chased car is car index 23 (record stride `0x18c`, struct base `0x9b0a4`). Per frame the game fetches the next pad word (`0x8005bf2c`), applies it with `0x8001ff24` (control) and steps the car with `0x8001d608` (physics); car 23 is created at the start state by `0x8001af2c`.
-- Consequence: start pose and inputs are fully known. The route itself needs the D1 car physics. Plan: either capture the route from a real PS1 run in the emulator (every frame position of car 23) or port `0x8001d608`; the emulator capture is exact.
-
-## Chase leader capture with the debugger (European disc, 2026-10-18)
-
-Descriptions only; recordings live outside the repo.
-
-- The European build is the US code shifted: functions after about `0x8005b000` sit `0x5ac` lower (pad decode, loader `0x8005bd6c`), the car physics step is at `0x8001d61c` and the per-frame update at `0x80022f68`. A masked opcode match of 48 words found them.
-- Car records start at `0x9aae0`, stride `0x18c`, position (x, y, z as three ints) at record offset `0x18`; the chased leader is record 23 (as in the US analysis). The physics step gets the record pointer in `a0`.
-- The replay entry is at `0x1fc32c` and can be overwritten with any entry of the same group from REPLAY.BLK (same start state), which forces that variant. The stream read pointer and base pointer sit at `0xbe904` and `0xbe90c`.
-- Findings: a plain per-frame read of record 23 gives a smooth track (speed 70 to 260 units per frame) when the player follows. With an idle player the leader stops after a few hundred frames, so the leader reacts to the player distance; a pure pad-stream replay is not enough to reproduce its speed. A savestate taken mid-mission cannot be used for other variants because the pad stream is already consumed.
+- Mission number -> group through a byte table, entry = group * 20 + variant, variant random 0..14 and never twice in a row; one mission state always uses variant 0. One entry is 5220 bytes.
+- Entry layout (offsets inside the 5220 bytes): `0..3000` pad stream (1000 records of 3 bytes: byte 0 high pad byte, byte 1 low pad byte, byte 2 repeat count; word = (b0 << 8 | b1) AND `0xa0fc`; low nibble of b0 selects the steering value from a byte table), `3000..4600` traffic ping block, `4600..4620` start state (int frame count, int x, y, z, short rotation, short flags), `4620..5220` more tables. Entries of the same group share the start state, only the pad stream and frame count differ.
+- The chased car is car index 23. Per frame the next pad word is applied to its controls and the car is stepped by the normal car physics, so start pose and inputs are fully known; the route needs the D1 car physics.
+- Observation from a recorded run: a plain per frame read of the chased car gives a smooth track (speed 70 to 260 units per frame) when the player follows. With an idle player the leader stops after a few hundred frames, so the leader reacts to the player distance and a pure pad stream replay is not enough to reproduce its speed.
