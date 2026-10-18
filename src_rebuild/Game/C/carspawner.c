@@ -73,6 +73,7 @@ static int spawnExitBlock = 0;	// the confirming Enter (R3) also leaves a car: i
 static int spawnPlaced = 0;		// the player is on the spot
 static int spawnPending = -1;		// start the showroom at this car at the next step, -1 = none
 static int spawnAuto = 0;			// test: 1 presses right, 2 presses start, 40 steps into the showroom
+static int spawnFixedAngle = 0;	// test -spawnangle <n>: the camera stays at this angle (2048 behind the car, 3072 / 1024 the sides) instead of circling
 static int spawnX, spawnZ, spawnDir;
 static char spawnText[64];
 
@@ -472,6 +473,8 @@ static int PrepareModelInner(const SPAWN_CAR* c)
 	if (c->wspc >= 0)
 		return PrepareWspc(c);
 
+	gD1WheelVisualOn[SPECIAL_CAR_SLOT] = 0;		// only a WSPC car draws its wheels from the visual table in a Driver 2 city
+
 	if (model <= 4)
 	{
 		for (i = 0; i < SPECIAL_CAR_SLOT; i++)
@@ -660,12 +663,17 @@ void CarSpawnerCommandLine(int index, int auto_mode)
 	spawnAuto = auto_mode;
 }
 
+void CarSpawnerFixedAngle(int angle)
+{
+	spawnFixedAngle = angle;
+}
+
 static void LeaveShowroom(void)
 {
 	gCarSpawner = 0;
 	spawnExitBlock = FrameCnt + 25;
 	gCantDrive = 0;
-	gCamAngleOverride = 0;
+	gCamAngleOverride = spawnFixedAngle;
 	gCameraAngle = 2048;	// back to the chase camera behind the car
 	Mission.message_timer[0] = 0;
 }
@@ -699,7 +707,7 @@ int CarSpawnerUpdate(int pressed)
 
 	spawnFrame++;
 	gCantDrive = 1;
-	gCamAngleOverride = 2048 + ((spawnFrame * 6) & 2047);	// the camera circles the car
+	gCamAngleOverride = spawnFixedAngle ? spawnFixedAngle : 2048 + ((spawnFrame * 6) & 2047);	// the camera circles the car
 
 	sprintf(spawnText, "< %s %d/%d > A / ENTER", spawnList[spawnIndex].name, spawnIndex + 1, spawnCount);
 	SetMissionMessage(spawnText, 9, 1);

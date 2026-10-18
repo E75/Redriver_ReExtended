@@ -2543,6 +2543,11 @@ int redriver2_main(int argc, char** argv)
 			CarSpawnerCommandLine(atoi(argv[i + 1]), mode);
 			i += 1 + (mode != 0);
 		}
+		else if (!strcmp(argv[i], "-spawnangle") && argc - i >= 2)
+		{
+			CarSpawnerFixedAngle(atoi(argv[i + 1]));
+			i++;
+		}
 		else if (!strcmp(argv[i], "-playercar"))
 		{
 			if (argc - i < 2)

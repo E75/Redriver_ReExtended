@@ -11,6 +11,7 @@ extern int gCarSpawner;				// 0 off, 1 showroom: the car is locked, the player c
 
 void CarSpawnerStart(void);			// from the menu: the showroom starts at the next game step
 void CarSpawnerCommandLine(int index, int auto_mode);	// -carspawner <index> [autoright|autostart]: tests
+void CarSpawnerFixedAngle(int angle);	// -spawnangle <n>: tests, the showroom camera stays at this angle
 int CarSpawnerBlocksExit(void);	// 1 while the player may not get out of the car
 int CarSpawnerUpdate(int pressed);	// every game step from CheckForPause; returns 1 when the pad press was used
 int LoadD2SlotCosmetics(int model);	// cosmetics of Driver 2 car 'model' of the loaded city into the special slot (also used by wspccar.c)

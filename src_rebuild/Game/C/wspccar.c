@@ -202,6 +202,137 @@ static void FitCosmetics(void)
 	cos->colBox = newBox;
 }
 
+typedef struct
+{
+	int x, y, z, radius;
+} WSPC_WHEEL;
+
+#define WSPC_WHEEL_PERCENT	108		// drawn wheels are a little bigger than the wheel boxes of the source so that they fill the arches
+#define WSPC_REST_DROP		57		// the springs of a car at rest are compressed: the body sits this much lower than the wheel height of the formula (measured)
+#define WSPC_HUB_OFFSET		-3		// DrawCarWheels: wheel x = +-17 - wheelDisp.vx; the wheel model sticks out from there, so the hub goes in a little
+
+// the wheelN=x.. y.. z.. radius.. lines of CAR.INFO (model coordinates, the model is centred on its bounding box)
+static int ReadWheels(const char* info, WSPC_WHEEL* wheels)
+{
+	int count = 0;
+	const char* p = info;
+
+	while (count < 4 && (p = strstr(p, "wheel")) != NULL)
+	{
+		int index, x, y, z, radius;
+
+		if (sscanf(p, "wheel%d=x%d y%d z%d radius%d", &index, &x, &y, &z, &radius) == 5)
+		{
+			wheels[count].x = x;
+			wheels[count].y = y;
+			wheels[count].z = z;
+			wheels[count].radius = radius;
+			count++;
+		}
+
+		p += 5;
+	}
+
+	return count;
+}
+
+// Draws the wheels where the source car has them (visual wheel table, as the Driver 1 cars: the handling keeps the donor's
+// values), lifts the body so that the arches sit on the wheels and puts the lamps on the body.
+static void FitWheelsAndLamps(const WSPC_WHEEL* wheels)
+{
+	CAR_COSMETICS* cos = &car_cosmetics[SPECIAL_CAR_SLOT];
+	MODEL* model = gCarCleanModelPtr[SPECIAL_CAR_SLOT];
+	SVECTOR* verts = GET_MODEL_DATA(SVECTOR, model, vertices);
+	int minY = 32767, maxY = -32768, maxX = 0, maxZ = 0;
+	int radius = 0, wheelY = 0;
+	int height, lampY, v, j, slot, shift;
+
+	for (v = 0; v < model->num_vertices; v++)
+	{
+		maxX = MAX(maxX, ABS(verts[v].vx));
+		maxZ = MAX(maxZ, ABS(verts[v].vz));
+		minY = MIN(minY, verts[v].vy);
+		maxY = MAX(maxY, verts[v].vy);
+	}
+
+	for (j = 0; j < 4; j++)
+	{
+		// wheel 0 and 1: left (-x) front and rear, 2 and 3: right front and rear
+		slot = (wheels[j].x > 0 ? 2 : 0) + (wheels[j].z > 0 ? 0 : 1);
+
+		gD1WheelVisual[SPECIAL_CAR_SLOT][slot].vx = (slot < 2 ? WSPC_HUB_OFFSET : -WSPC_HUB_OFFSET) - wheels[j].x;
+		gD1WheelVisual[SPECIAL_CAR_SLOT][slot].vz = -wheels[j].z;
+
+		radius += wheels[j].radius;
+		wheelY += wheels[j].y;
+	}
+
+	radius = radius * WSPC_WHEEL_PERCENT / 400;
+	wheelY /= 4;
+
+	// DrawCarWheels puts the wheel centre at 14 - vy - wheelSize, and the road is where the donor's wheels touch it; the body is drawn as it is,
+	// so its vertices go down (or up) until the wheel centres of the source sit at that height
+	shift = (14 - cos->wheelDisp[0].vy) - radius - wheelY + WSPC_REST_DROP;
+
+	for (j = 0; j < 3; j++)
+	{
+		MODEL* m = j == 0 ? gCarCleanModelPtr[SPECIAL_CAR_SLOT] : j == 1 ? gCarDamModelPtr[SPECIAL_CAR_SLOT] : gCarLowModelPtr[SPECIAL_CAR_SLOT];
+		SVECTOR* mv = GET_MODEL_DATA(SVECTOR, m, vertices);
+
+		for (v = 0; v < m->num_vertices; v++)
+			mv[v].vy += shift;
+	}
+
+	minY += shift;
+	maxY += shift;
+
+	for (j = 0; j < 4; j++)
+		gD1WheelVisual[SPECIAL_CAR_SLOT][j].vy = cos->wheelDisp[j].vy;
+
+	gD1WheelSizeVisual[SPECIAL_CAR_SLOT] = radius;
+	gD1WheelVisualOn[SPECIAL_CAR_SLOT] = 1;
+
+	cos->cog.vx = 0;
+	cos->cog.vy = 0;
+	cos->cog.vz = 0;
+
+	height = maxY - minY;
+	lampY = minY + height * 45 / 100;
+
+	cos->headLight.vx = maxX * 62 / 100;
+	cos->headLight.vy = lampY;
+	cos->headLight.vz = maxZ - 4;
+
+	cos->frontInd.vx = maxX * 80 / 100;
+	cos->frontInd.vy = lampY + 6;
+	cos->frontInd.vz = maxZ - 4;
+
+	cos->backInd.vx = maxX * 80 / 100;
+	cos->backInd.vy = lampY;
+	cos->backInd.vz = -(maxZ - 4);
+
+	cos->brakeLight.vx = maxX * 62 / 100;
+	cos->brakeLight.vy = lampY;
+	cos->brakeLight.vz = -(maxZ - 4);
+
+	cos->revLight.vx = maxX * 45 / 100;
+	cos->revLight.vy = lampY + 6;
+	cos->revLight.vz = -(maxZ - 4);
+
+	cos->policeLight.vx = 0;
+	cos->policeLight.vy = minY;
+	cos->policeLight.vz = 0;
+
+	cos->exhaust.vx = maxX * 45 / 100;
+	cos->exhaust.vy = maxY - 8;
+	cos->exhaust.vz = -maxZ;
+	cos->smoke = cos->exhaust;
+
+	cos->fire.vx = 0;
+	cos->fire.vy = minY + height * 30 / 100;
+	cos->fire.vz = maxZ / 2;
+}
+
 int WspcCar_LoadIntoSlot(int car)
 {
 	static const char* const names[3] = { "CLEAN.MDL", "DAMAGED.MDL", "LOW.MDL" };
@@ -209,7 +340,9 @@ int WspcCar_LoadIntoSlot(int car)
 	char* files[3] = { NULL, NULL, NULL };
 	char* tex = NULL;
 	char* lump = NULL;
-	int sizes[3], texSize = 0, pages, i, total, at, ok = 0;
+	char* info = NULL;
+	WSPC_WHEEL wheels[4];
+	int sizes[3], texSize = 0, infoSize = 0, pages, i, total, at, ok = 0;
 	int* offsets;
 
 	if (car < 0 || !gWspcDlcEnabled || !(gWspcDlcCarMask & (1 << car)) || GameLevel >= FIRST_DRIVER1_CITY)
@@ -274,6 +407,19 @@ int WspcCar_LoadIntoSlot(int car)
 		goto done;
 
 	FitCosmetics();
+
+	// the converted car knows where its wheels are; without CAR.INFO the donor's wheels stay
+	sprintf(path, "%s\\CAR.INFO", folder);
+	info = ReadWholeFile(path, &infoSize);
+
+	if (info)
+	{
+		info[infoSize] = 0;
+
+		if (ReadWheels(info, wheels) == 4)
+			FitWheelsAndLamps(wheels);
+	}
+
 	D1BuildDamageZones(SPECIAL_CAR_SLOT);
 	ok = 1;
 
@@ -283,6 +429,7 @@ done:
 
 	free(tex);
 	free(lump);
+	free(info);
 	return ok;
 }
 
