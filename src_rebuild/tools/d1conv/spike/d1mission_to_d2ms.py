@@ -25,7 +25,8 @@ HEADER_BYTES = len(HEADER_NAMES) * 4
 MAX_TARGETS = 16
 TARGET_INTS = 16
 TIMER_COUNTER_FLAG = 0x8000
-TIME_DAY = 1
+TIME_DAWN, TIME_DAY, TIME_DUSK, TIME_NIGHT = 0, 1, 2, 3
+WEATHER_RAIN = 1
 TARGET_POINT = 1
 POINT_DISPLAY = 0x70                       # minimap blip, direction arrow, 3D marker (99 of the 211 shown D2 point targets)
 
@@ -217,7 +218,16 @@ def check_d2ms(m: D2Mission) -> None:
         raise Unsupported("check: no target loop")
 
 
-def convert(mission: bytes) -> Result:
+def pc_environment(script: Path) -> tuple[int, int, list[str]]:
+    """Time of day, weather and notes from a PC mission script (Night, Dusk, Dawn, Raining; Snowing, Foggy and
+    Lightning have no D2MS header field and are only reported). Commented-out commands are ignored."""
+    words = {line.split("//")[0].strip().split(" ")[0].lower() for line in script.read_text(errors="replace").splitlines()}
+    time = next((t for w, t in (("night", TIME_NIGHT), ("dusk", TIME_DUSK), ("dawn", TIME_DAWN)) if w in words), TIME_DAY)
+    weather = WEATHER_RAIN if "raining" in words else 0
+    return time, weather, [f"PC {w}" for w in ("snowing", "foggy", "lightning") if w in words]
+
+
+def convert(mission: bytes, pc_script: Path | None = None) -> Result:
     recs = d1.parse(mission)
     names = {op: n for op, (n, _) in d1.OPNAMES.items()}
     first = {}
@@ -236,6 +246,9 @@ def convert(mission: bytes) -> Result:
         rot = (rot + 2048) & 4095
     h = new_header(city, (x, z, rot))
     notes: list[str] = []
+    if pc_script:
+        h["time"], h["weather"], pc_notes = pc_environment(pc_script)
+        notes += ["time and weather from the PC script"] + pc_notes
     strings = Strings()
     targets: list[list[int]] = []
     script: list[int] = []
@@ -514,6 +527,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("blk", type=Path, nargs="?", help="DRIVER1\\MISSIONS\\MISSION.BLK")
     ap.add_argument("--out", type=Path, help="write M<1000+n>.D2MS files here")
+    ap.add_argument("--pc-scripts", type=Path, help="PC Scripts/Missions folder: take time of day and weather from missionN+1.dms")
     ap.add_argument("--selftest", type=Path, help="DRIVER2\\MISSIONS\\MISSIONS.BLK to verify the layout")
     ap.add_argument("missions", type=int, nargs="*", help="mission numbers (default: the 44 story missions)")
     args = ap.parse_args()
@@ -525,7 +539,8 @@ def main() -> None:
     done = 0
     for n in args.missions or range(44):
         try:
-            res = convert(missions[n])
+            pc = args.pc_scripts / f"mission{n + 1}.dms" if args.pc_scripts and n < 44 else None   # story missions only
+            res = convert(missions[n], pc if pc and pc.exists() else None)
         except Unsupported as why:
             print(f"mission {n}: skipped: {why}")
             continue
