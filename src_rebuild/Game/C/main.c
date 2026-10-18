@@ -64,6 +64,7 @@
 #include "cutrecorder.h"
 #include "chopper.h"
 #include "carspawner.h"
+#include "carovr.h"
 
 int levelstartpos[8][4] = {
 	{ 4785, -1024, -223340, 0},
@@ -1555,6 +1556,8 @@ void CheckForPause(void)
 	{
 #ifndef PSX
 		// [A] Car Spawner showroom: left / right change the car, A or Enter confirms it
+		CarOverrideUpdate();
+
 		if (CarSpawnerUpdate(paddp))
 			return;
 #endif
@@ -2534,6 +2537,11 @@ int redriver2_main(int argc, char** argv)
 		{
 			extern int gD1WheelPercent;
 			gD1WheelPercent = atoi(argv[i + 1]);
+			i++;
+		}
+		else if (!strcmp(argv[i], "-carsdir") && argc - i >= 2)
+		{
+			strncpy(gCarsDir, argv[i + 1], sizeof(gCarsDir) - 1);
 			i++;
 		}
 		else if (!strcmp(argv[i], "-carexport") && argc - i >= 2)

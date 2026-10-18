@@ -19,6 +19,7 @@
 #include "main.h"
 #include "shadow.h"
 #include "carexport.h"
+#include "carovr.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -554,7 +555,6 @@ static void ExportTick(void)
 	const SPAWN_CAR* c = &spawnList[spawnIndex];
 	CAR_DATA* cp = &car_data[(int)player[0].playerCarId];
 	char id[96], path[300];
-	char* d;
 	int slot = SPECIAL_CAR_SLOT, comp[4], k;
 
 	if (++exportWait < 10)
@@ -571,10 +571,7 @@ static void ExportTick(void)
 			fprintf(exportIndex, "{ \"cars\": [\n");
 	}
 
-	sprintf(id, "%s%s%s", c->model < 8 ? LevelNames[c->city] : "", c->model < 8 ? " " : "", c->name);
-
-	for (d = id; *d; d++)
-		*d = (*d >= 'A' && *d <= 'Z') ? *d + 32 : (*d == ' ' ? '_' : *d);
+	CarOverrideId(id, c->city, c->model);
 
 	if (c->model <= 4)
 	{
@@ -667,6 +664,12 @@ void CarSpawnerStart(void)
 void CarExportCommandLine(const char* dir)
 {
 	strncpy(exportDir, dir, sizeof(exportDir) - 1);
+}
+
+// the city of the car in the special slot (car override): the loaded city unless the showroom put a car of another city in it
+int CarSpawnerSlotCity(int model)
+{
+	return (slotModel == model && slotCity >= 0) ? slotCity : GameLevel;
 }
 
 void CarSpawnerCommandLine(int index, int auto_mode)

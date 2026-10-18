@@ -550,10 +550,18 @@ int CarExportWrite(const char* dir, const char* id, const char* name, int city, 
 {
 	char path[512];
 	MODEL* clean = gCarCleanModelPtr[slot];
-	const CAR_COSMETICS* cc = &car_cosmetics[slot];
+	CAR_COSMETICS ccCopy = car_cosmetics[slot];
+	const CAR_COSMETICS* cc = &ccCopy;
 
 	if (!clean)
 		return 0;
+
+	// the cars of the older game are drawn with their own wheel table (cosmetic.c)
+	if (gD1WheelVisualOn[slot])
+	{
+		memcpy(ccCopy.wheelDisp, gD1WheelVisual[slot], sizeof(ccCopy.wheelDisp));
+		ccCopy.wheelSize = gD1WheelSizeVisual[slot];
+	}
 
 	sprintf(path, "%s/%s", dir, id);
 	_mkdir(path);
