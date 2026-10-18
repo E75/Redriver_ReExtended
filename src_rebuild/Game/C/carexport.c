@@ -5,6 +5,7 @@
 #include "cosmetic.h"
 #include "texture.h"
 #include "models.h"
+#include "wheelforces.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -549,13 +550,13 @@ static int WriteJson(const char* path, const char* id, const char* name, int cit
 	Vec(f, cc->cog.vx, cc->cog.vy, cc->cog.vz);
 	fprintf(f, ",\n  \"wheelRadius\": %d,\n", cc->wheelSize);
 
-	// wheels: DrawCarWheels: y = -radius - disp.y - compression + 14. 0 and 1 are the +17 side, even = front axle
+	// wheels: DrawCarWheels: y = -radius - disp.y - compression + WheelRestCompression(). 0 and 1 are the +17 side, even = front axle
 	fprintf(f, "  \"wheels\": [\n");
 
 	for (w = 0; w < 4; w++)
 	{
 		int x = ((w & 2) ? -WHEEL_HUB_X : WHEEL_HUB_X) - cc->wheelDisp[w].vx;
-		int y = -cc->wheelSize - cc->wheelDisp[w].vy - comp[w] + 14;
+		int y = -cc->wheelSize - cc->wheelDisp[w].vy - comp[w] + WheelRestCompression();
 		int z = -cc->wheelDisp[w].vz;
 
 		fprintf(f, "    { \"axle\": \"%s\", \"hubX\": %d, \"compression\": %d, \"pos\": ", (w & 1) ? "rear" : "front", (w & 2) ? -WHEEL_HUB_X : WHEEL_HUB_X, comp[w]);
