@@ -87,7 +87,10 @@ bool D1RoadTable::Build(const LevFile& d1, const D1RoadMap& map, std::string& lo
 	std::vector<DRIVER1_JUNCTION> d1Juncs;
 	std::vector<DRIVER1_ROADBOUNDS> bounds;
 
-	if (!ReadTable(d1, LUMP_ROADS, d1Roads) || !ReadTable(d1, LUMP_JUNCTIONS, d1Juncs) || !ReadTable(d1, LUMP_ROADBOUNDS, bounds) ||
+	// the garage level has roads only, no JUNCTIONS lump
+	const bool hasJunctions = d1.FindLump(LUMP_JUNCTIONS) != nullptr;
+
+	if (!ReadTable(d1, LUMP_ROADS, d1Roads) || (hasJunctions && !ReadTable(d1, LUMP_JUNCTIONS, d1Juncs)) || !ReadTable(d1, LUMP_ROADBOUNDS, bounds) ||
 		bounds.size() != d1Roads.size())
 	{
 		Log(log, "ERROR: ROADS / JUNCTIONS / ROADBOUNDS lumps are missing or inconsistent");

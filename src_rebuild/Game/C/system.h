@@ -157,6 +157,8 @@ extern XYPAIR citylumps[NUM_CITIES][4];
 // Driver 1 DLC library (src_rebuild/d1dlc/d1dlc.h)
 extern int gD1DlcCityMask;
 extern int gD1DlcEnabled;
+extern int gD1DlcGarage;
+extern int D1Dlc_CityIndex(int gameLevel);
 extern bool D1Dlc_CityAvailable(int gameLevel);
 extern bool D1Dlc_ConversionPending();
 extern int gD1DlcChecked;

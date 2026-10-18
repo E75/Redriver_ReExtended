@@ -1205,7 +1205,7 @@ void SetCityType(CITYTYPE type)
 	if (IS_DRIVER1_CITY(GameLevel))
 	{
 		// no night LEV for Driver 1 cities
-		D1Dlc_ConvertCity(GameLevel - FIRST_DRIVER1_CITY, "", filename, sizeof(filename));
+		D1Dlc_ConvertCity(D1Dlc_CityIndex(GameLevel), "", filename, sizeof(filename));
 		printInfo("%s", D1Dlc_LastLog());
 	}
 	else

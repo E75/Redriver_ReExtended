@@ -32,8 +32,11 @@ bool LevFile::Load(const char* path)
 	if (li.loadtime_offset + 12 > size || li.inmem_offset + 12 > size)
 		return false;
 
-	// Driver 2 sub-lump lists start directly with LUMP_TEXTURENAMES; Driver 1 lists start with a lump count
-	m_format = At<int>(li.loadtime_offset + sizeof(LUMP)) == LUMP_TEXTURENAMES ? LEV_FORMAT_DRIVER2 : LEV_FORMAT_DRIVER1;
+	// Driver 2 sub-lump lists start directly with LUMP_TEXTURENAMES (type, size); Driver 1 lists start with a lump count,
+	// which can also be 5 (the small garage level): then the next word is a lump type again, never a lump size
+	const int first = At<int>(li.loadtime_offset + sizeof(LUMP));
+	const int second = At<int>(li.loadtime_offset + sizeof(LUMP) + sizeof(int));
+	m_format = (first == LUMP_TEXTURENAMES && second != LUMP_TEXTURENAMES) ? LEV_FORMAT_DRIVER2 : LEV_FORMAT_DRIVER1;
 
 	if (!WalkLumps(li.loadtime_offset + sizeof(LUMP), li.loadtime_offset + li.loadtime_size, LEV_SECTION_LOADTIME) ||
 		!WalkLumps(li.inmem_offset + sizeof(LUMP), li.inmem_offset + li.inmem_size, LEV_SECTION_INMEM))

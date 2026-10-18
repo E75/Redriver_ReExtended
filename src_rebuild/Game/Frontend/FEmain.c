@@ -3886,7 +3886,8 @@ int Driver1MissionCityScreen(int bSetup)
 
 			btn.action = FE_MAKEVAR(BTN_NEXT_SCREEN, D1MISSION_LIST_SCREEN);
 			btn.var = FE_MAKEVAR(1, cities[i]);		// GameLevel: the list shows the missions of this city
-			strcpy(btn.Name, Driver1CityNames[cities[i] - FIRST_DRIVER1_CITY]);
+			// the missions of the Training slot play in the car park level
+			strcpy(btn.Name, cities[i] == D1_TRAINING_LEVEL ? "Garage" : Driver1CityNames[cities[i] - FIRST_DRIVER1_CITY]);
 		}
 	}
 
