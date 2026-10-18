@@ -93,6 +93,17 @@ Velocity is the fixed point position step times 256.
 - The chased car is driven by the pad stream only (`0x800230b0`): no distance logic. It brakes with the hand brake and straight
   wheels when the mission ends (game over flag) or the frame count of the start state runs out, which explains the stop with an
   idle player (the mission was lost).
+- Apart from its input the chased car is an ordinary physics car, the same in every city: the same step, forces and integration
+  as the player, and the normal car collision code (in the chase modes it is always flagged as possibly colliding). Traffic and
+  buildings therefore push it (the damage flag of the record is set at the first traffic contact), and after a contact
+  the recorded pads simply play on (open loop, no correction back to the route). A 1:1 conversion therefore stores the pad
+  stream and the start state per variant and drives the car with the Driver 1 handling and the game's own collisions. Recorded
+  positions are only exact up to the first contact. The port is not bit exact, so how long pads alone stay on the route in
+  Redriver is not measured yet; a hybrid (positions until the first contact, then the pads from that frame on) needs no exactness.
+- Damage of the chased car: its damage total (the value the ram goal compares with the mission's damage limit) only grows in
+  hits by the player car; traffic contacts only raise the damage of the hit zone, and world contacts give it no damage at all.
+- Pad pack: `src_rebuild/tools/d1conv/d1pads_pack.py` writes the pad stream, start state and chase car model (set by the
+  mission script) of every variant to `M<1000 + script>.PADS` next to the `.CHASE` file; the format is in the script.
 - Not validated yet: lateral grip and roll (the capture has no pad input; needs a full record capture with known input, the
   breakpoint at EU `0x8001d6f8` gives the record pointer in `a0`), brakes, car to car collisions.
 
