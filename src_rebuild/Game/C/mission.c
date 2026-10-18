@@ -2348,6 +2348,10 @@ int MRProcessTarget(MR_THREAD *thread, MS_TARGET *target)
 				if (IsDriver1ChaseCar(target) && cp->controlType == CONTROL_TYPE_CIV_AI)
 					D1ChasePath_Step(cp);
 
+				// the lead car AI fills the damage bar, the civilian AI does not
+				if (IsDriver1ChaseCar(target))
+					DamageBar.position = cp->totalDamage;
+
 				// make Caine's Compound vans moving
 				if (target->s.car.type == 1)
 				{
