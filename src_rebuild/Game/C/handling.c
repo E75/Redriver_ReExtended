@@ -105,10 +105,10 @@ void InitCarPhysics(CAR_DATA* cp, LONGVECTOR4* startpos, int direction)
 
 	UpdateCarDrawMatrix(cp);
 
-	cp->hd.wheel[0].susCompression = 14 - odz;
-	cp->hd.wheel[1].susCompression = odz + 14;
-	cp->hd.wheel[2].susCompression = 14 - odz;
-	cp->hd.wheel[3].susCompression = odz + 14;
+	cp->hd.wheel[0].susCompression = WheelRestCompression() - odz;
+	cp->hd.wheel[1].susCompression = odz + WheelRestCompression();
+	cp->hd.wheel[2].susCompression = WheelRestCompression() - odz;
+	cp->hd.wheel[3].susCompression = odz + WheelRestCompression();
 
 	cp->thrust = 0;
 	cp->wheel_angle = 0;

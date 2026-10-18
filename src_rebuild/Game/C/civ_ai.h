@@ -56,6 +56,7 @@ extern int CreateCivCarWotDrivesABitThenStops(int direction, LONGVECTOR4* startP
 extern int CreateStationaryCivCar(int direction, int orientX, int orientZ, LONGVECTOR4* startPos, int externalModel, int palette, int controlFlags); // 0x00028960
 
 extern int CreateDrivingCivCarNear(int x, int z, int heading, int externalModel, int palette);	// Driver 1 mission target car
+extern int CivFindLaneNear(CAR_DATA* cp, EXTRA_CIV_DATA* outDat, int* outX, int* outZ);		// nearest traffic lane of a car, for rejoining the traffic
 
 extern int CheckChangeLanes(DRIVER2_STRAIGHT* straight, DRIVER2_CURVE* curve, int distAlongSegment, CAR_DATA* cp, int tryToPark); // 0x00026F20
 extern int NotTravellingAlongCurve(int x, int z, int dir, DRIVER2_CURVE* cv);

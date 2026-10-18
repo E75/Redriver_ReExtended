@@ -2690,7 +2690,9 @@ static int LaneDriveDirection(DRIVER2_ROAD_INFO* roadInfo, int lane, int distAlo
 // The Driver 2 lead car AI (free roamer) does not fit the Driver 1 roads (it leaves its lane and stops at the first
 // junction), the civilian AI knows them. Returns the car slot, -1 when there is no free slot or no lane near the spot.
 // limit: 8 directions in rings of 1500 units up to 15000, twice, upgrade: ask the road map for the nearest lane directly
-int CreateDrivingCivCarNear(int x, int z, int heading, int externalModel, int palette)
+// [A] nearest traffic lane to a spot that drives about the wanted way (heading), with the first pass only for lanes within 90 degrees.
+// self = a car that does not count as being in the way (or NULL)
+static int FindDrivingLaneSpot(int x, int z, int heading, int lbody, const CAR_DATA* self, EXTRA_CIV_DATA* outDat, CIV_ROUTE_ENTRY* outNode, int* outDir, int* outLane)
 {
 	const int ringStep = 1500;
 	const int maxRings = 10;
@@ -2698,38 +2700,8 @@ int CreateDrivingCivCarNear(int x, int z, int heading, int externalModel, int pa
 	DRIVER2_ROAD_INFO roadInfo;
 	EXTRA_CIV_DATA civDat;
 	CIV_ROUTE_ENTRY node;
-	LONGVECTOR4 pos;
 	VECTOR spot;
-	CAR_DATA* newCar;
-	int model, lbody, ring, k, i;
-
-	model = -1;
-	for (i = 0; i < MAX_CAR_RESIDENT_MODELS; i++)
-	{
-		if (residentCarModels[i] == externalModel)
-		{
-			model = i;
-			break;
-		}
-	}
-
-	if (model == -1)
-		return -1;
-
-	newCar = NULL;
-	for (i = 0; i < MAX_CARS; i++)
-	{
-		if (car_data[i].controlType == CONTROL_TYPE_NONE && reservedSlots[i] == 0)
-		{
-			newCar = &car_data[i];
-			break;
-		}
-	}
-
-	if (newCar == NULL)
-		return -1;
-
-	lbody = car_cosmetics[model].colBox.vz;
+	int ring, k, i;
 
 	// first pass: only a lane that drives about the wanted way (within 90 degrees), second pass: any lane
 	for (ring = 0; ring < 2 * (maxRings + 1); ring++)
@@ -2842,7 +2814,7 @@ int CreateDrivingCivCarNear(int x, int z, int heading, int externalModel, int pa
 			tooClose = 0;
 			for (i = 0; i < MAX_CARS; i++)
 			{
-				if (car_data[i].controlType != CONTROL_TYPE_NONE)
+				if (car_data[i].controlType != CONTROL_TYPE_NONE && &car_data[i] != self)
 				{
 					dx = node.x - car_data[i].hd.where.t[0];
 					dz = node.z - car_data[i].hd.where.t[2];
@@ -2857,28 +2829,89 @@ int CreateDrivingCivCarNear(int x, int z, int heading, int externalModel, int pa
 
 			civDat.surfInd = roadSeg;
 			civDat.angle = dir;
-			civDat.thrustState = CIV_AI_THRUST_ACCELERATE;
-			civDat.ctrlState = CIV_AI_CTRL_DRIVE;
-			civDat.palette = palette;
-			civDat.controlFlags = 0;
+			*outDat = civDat;
+			*outNode = node;
+			*outDir = dir;
+			*outLane = lane;
 
-			pos[0] = node.x;
-			pos[1] = 0;
-			pos[2] = node.z;
-
-			InitCar(newCar, dir, &pos, CONTROL_TYPE_CIV_AI, model, 0, (char*)&civDat);
-			newCar->ai.c.currentLane = lane;
-			numCivCars++;
-
-#ifndef PSX
-			gCivSpawnFrame[newCar->id] = FrameCnt;
-#endif
-
-			return newCar->id;
+			return 1;
 		}
 	}
 
-	return -1;
+	return 0;
+}
+
+int CreateDrivingCivCarNear(int x, int z, int heading, int externalModel, int palette)
+{
+	EXTRA_CIV_DATA civDat;
+	CIV_ROUTE_ENTRY node;
+	LONGVECTOR4 pos;
+	CAR_DATA* newCar;
+	int model, lbody, dir, lane, i;
+
+	model = -1;
+	for (i = 0; i < MAX_CAR_RESIDENT_MODELS; i++)
+	{
+		if (residentCarModels[i] == externalModel)
+		{
+			model = i;
+			break;
+		}
+	}
+
+	if (model == -1)
+		return -1;
+
+	newCar = NULL;
+	for (i = 0; i < MAX_CARS; i++)
+	{
+		if (car_data[i].controlType == CONTROL_TYPE_NONE && reservedSlots[i] == 0)
+		{
+			newCar = &car_data[i];
+			break;
+		}
+	}
+
+	if (newCar == NULL)
+		return -1;
+
+	lbody = car_cosmetics[model].colBox.vz;
+
+	if (!FindDrivingLaneSpot(x, z, heading, lbody, NULL, &civDat, &node, &dir, &lane))
+		return -1;
+
+	civDat.thrustState = CIV_AI_THRUST_ACCELERATE;
+	civDat.ctrlState = CIV_AI_CTRL_DRIVE;
+	civDat.palette = palette;
+	civDat.controlFlags = 0;
+
+	pos[0] = node.x;
+	pos[1] = 0;
+	pos[2] = node.z;
+
+	InitCar(newCar, dir, &pos, CONTROL_TYPE_CIV_AI, model, 0, (char*)&civDat);
+	newCar->ai.c.currentLane = lane;
+	numCivCars++;
+
+#ifndef PSX
+	gCivSpawnFrame[newCar->id] = FrameCnt;
+#endif
+
+	return newCar->id;
+}
+
+// [A] where a car that left the road can rejoin the traffic: the nearest lane that drives about the way it faces (Driver 1 chase car, d1chase.c)
+int CivFindLaneNear(CAR_DATA* cp, EXTRA_CIV_DATA* outDat, int* outX, int* outZ)
+{
+	CIV_ROUTE_ENTRY node;
+	int dir, lane;
+
+	if (!FindDrivingLaneSpot(cp->hd.where.t[0], cp->hd.where.t[2], cp->hd.direction, cp->ap.carCos->colBox.vz, cp, outDat, &node, &dir, &lane))
+		return 0;
+
+	*outX = node.x;
+	*outZ = node.z;
+	return 1;
 }
 
 // [D] [T]

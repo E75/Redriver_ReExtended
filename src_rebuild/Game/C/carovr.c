@@ -7,6 +7,7 @@
 #include "cars.h"
 #include "main.h"
 #include "mission.h"
+#include "wheelforces.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -158,7 +159,7 @@ static void Apply(int slot, const OVERRIDE* o)
 	for (w = 0; w < 4; w++)
 	{
 		disp[w].vx = o->hubX[w] - o->wheel[w][0];
-		disp[w].vy = 14 - o->comp[w] - o->radius - o->wheel[w][1];
+		disp[w].vy = WheelRestCompression() - o->comp[w] - o->radius - o->wheel[w][1];
 		disp[w].vz = -o->wheel[w][2];
 	}
 

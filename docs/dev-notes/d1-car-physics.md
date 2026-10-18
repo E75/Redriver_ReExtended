@@ -112,6 +112,12 @@ turning response per force stays as before (it was already right for the unscale
 value, and the roll lever of point 3 is the D1 one. D2 cities and `d1Handling=0` are unchanged (checked: Chicago flat out run
 identical frame by frame with the option on and off).
 
+The suspension depth offset of a wheel at rest (`WheelRestCompression()`: D1 20, D2 14) is used by the force step, by the start
+compression and by the wheel drawing (`DrawCarWheels`), and must be used by the car export and the car.json override too. With
+the D1 offset only in the force step the wheels rest 5 to 6 units deeper compressed and were drawn that much above the road and up
+into the arches; with the shared offset every D1 car shows its wheels exactly as with `d1Handling=0` (car export of all six D1
+cities compared), and the start compressions are the D1 creation values.
+
 ## Next steps
 
 1. Full record capture with known input (accelerate, steer at lock, brake), and the same script in Redriver: compare
