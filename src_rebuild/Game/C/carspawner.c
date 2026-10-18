@@ -18,6 +18,8 @@
 #include "pad.h"
 #include "main.h"
 #include "shadow.h"
+#include "carexport.h"
+#include "carovr.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -71,6 +73,9 @@ static int spawnPending = -1;		// start the showroom at this car at the next ste
 static int spawnAuto = 0;			// test: 1 presses right, 2 presses start, 40 steps into the showroom
 static int spawnX, spawnZ, spawnDir;
 static char spawnText[64];
+int gSpawnAngle = 0;			// -spawnangle <n>: the showroom camera stays at this angle (2048 = behind the car), 0 = circles
+char gSpawnId[48];			// -spawnid <city>_<model>: the showroom starts at this car (carovr.c CarOverrideId)
+static char exportDir[260];		// -carexport: the folder of the export, empty = off
 
 static void AddCar(int city, int model, const char* name)
 {
@@ -541,6 +546,79 @@ static int ShowCar(void)
 	return 1;
 }
 
+// -carexport: the showroom steps through every car of the list; each car stands still for a moment (the suspension settles),
+// then it is written to exportDir (carexport.c). The game ends after the last car.
+static FILE* exportIndex = NULL;
+static int exportCount = 0;
+static int exportWait = 0;
+
+static void ExportTick(void)
+{
+	const SPAWN_CAR* c = &spawnList[spawnIndex];
+	CAR_DATA* cp = &car_data[(int)player[0].playerCarId];
+	char id[96], path[300];
+	int slot = SPECIAL_CAR_SLOT, comp[4], k;
+
+	if (++exportWait < 30)
+		return;
+
+	exportWait = 0;
+
+	if (!exportIndex)
+	{
+		sprintf(path, "%s/index.json", exportDir);
+		exportIndex = fopen(path, "wb");
+
+		if (exportIndex)
+			fprintf(exportIndex, "{ \"cars\": [\n");
+	}
+
+	CarOverrideId(id, c->city, c->model);
+
+	if (c->model <= 4)
+	{
+		for (k = 0; k < SPECIAL_CAR_SLOT; k++)
+		{
+			if (residentCarModels[k] == c->model && gCarCleanModelPtr[k])
+			{
+				slot = k;
+				break;
+			}
+		}
+	}
+
+	for (k = 0; k < 4; k++)
+		comp[k] = cp->hd.wheel[k].susCompression;
+
+	if (CarExportWrite(exportDir, id, c->name, c->city, c->model, slot, comp))
+	{
+		printInfo("car export: %s -> %s\n", c->name, id);
+
+		if (exportIndex)
+			fprintf(exportIndex, "%s  { \"id\": \"%s\", \"name\": \"%s\", \"city\": \"%s\", \"model\": %d }", exportCount ? ",\n" : "", id, c->name, LevelNames[c->city], c->model);
+
+		exportCount++;
+	}
+	else
+		printWarning("car export: %s could not be written\n", c->name);
+
+	// the next car that loads
+	while (++spawnIndex < spawnCount)
+	{
+		if (ShowCar())
+			return;
+	}
+
+	if (exportIndex)
+	{
+		fprintf(exportIndex, "\n] }\n");
+		fclose(exportIndex);
+	}
+
+	printInfo("car export: %d of %d cars written to %s\n", exportCount, spawnCount, exportDir);
+	exit(0);
+}
+
 static void StartShowroom(int index)
 {
 	CAR_DATA* cp;
@@ -573,6 +651,21 @@ static void StartShowroom(int index)
 	}
 
 	spawnIndex = (index >= 0 && index < spawnCount) ? index : 0;
+
+	if (gSpawnId[0])
+	{
+		int i;
+
+		for (i = 0; i < spawnCount; i++)
+		{
+			char id[48];
+
+			CarOverrideId(id, spawnList[i].city, spawnList[i].model);
+
+			if (!strcmp(id, gSpawnId))
+				spawnIndex = i;
+		}
+	}
 	spawnFrame = 0;
 	spawnPlaced = 0;
 
@@ -583,6 +676,17 @@ static void StartShowroom(int index)
 void CarSpawnerStart(void)
 {
 	spawnPending = 0;
+}
+
+void CarExportCommandLine(const char* dir)
+{
+	strncpy(exportDir, dir, sizeof(exportDir) - 1);
+}
+
+// the city of the car in the special slot (car override): the loaded city unless the showroom put a car of another city in it
+int CarSpawnerSlotCity(int model)
+{
+	return (slotModel == model && slotCity >= 0) ? slotCity : GameLevel;
 }
 
 void CarSpawnerCommandLine(int index, int auto_mode)
@@ -609,6 +713,9 @@ int CarSpawnerBlocksExit(void)
 
 int CarSpawnerUpdate(int pressed)
 {
+	if (exportDir[0] && spawnPending < 0 && gCarSpawner == 0 && FrameCnt > 20)
+		spawnPending = 0;	// -carexport: the showroom starts at the first car
+
 	if (spawnPending >= 0 && FrameCnt > 20 && gCarSpawner == 0)
 	{
 		int index = spawnPending;
@@ -630,7 +737,13 @@ int CarSpawnerUpdate(int pressed)
 
 	spawnFrame++;
 	gCantDrive = 1;
-	gCamAngleOverride = 2048 + ((spawnFrame * 6) & 2047);	// the camera circles the car
+	gCamAngleOverride = gSpawnAngle ? gSpawnAngle : 2048 + ((spawnFrame * 6) & 2047);	// the camera circles the car
+
+	if (exportDir[0])
+	{
+		ExportTick();
+		return 0;
+	}
 
 	sprintf(spawnText, "< %s %d/%d > A / ENTER", spawnList[spawnIndex].name, spawnIndex + 1, spawnCount);
 	SetMissionMessage(spawnText, 9, 1);
