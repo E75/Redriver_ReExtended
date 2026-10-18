@@ -76,6 +76,7 @@ int gCivSpawnFrame[MAX_CARS];	// frame a civilian car was pinged in: it fades in
 static int civStuckSteps[MAX_CARS];
 static int civBargeLeft[MAX_CARS];
 static int civReverseLeft[MAX_CARS];		// steps a stuck car still backs up
+unsigned char civCornerBrake[MAX_CARS];		// the mission code sets it every step for a chased car: it brakes for bends (CivCornerSpeed)
 int gCivReverseCount;							// test log: reverse manoeuvres started
 int gCivNearContact;							// test log: steps a moving car had another car closer than half its length
 #endif
@@ -203,6 +204,7 @@ int InitCar(CAR_DATA* cp, int direction, LONGVECTOR4* startPos, unsigned char co
 	civStuckSteps[cp->id] = 0;
 	civBargeLeft[cp->id] = 0;
 	civReverseLeft[cp->id] = 0;
+	civCornerBrake[cp->id] = 0;
 #endif
 
 	if (startPos == NULL)
@@ -3008,7 +3010,14 @@ int CivAccelTrafficRules(CAR_DATA * cp, int* distToNode)
 
 
 			if (FIXEDH(cp->hd.wheel_speed) > cp->ai.c.maxSpeed)
+			{
+#ifndef PSX
+				// a chased car that is clearly too fast for the bend ahead brakes instead of coasting into the wall
+				if (civCornerBrake[cp->id] && FIXEDH(cp->hd.wheel_speed) > cp->ai.c.maxSpeed + cp->ai.c.maxSpeed / 10)
+					return -newAccel;
+#endif
 				return newAccel >> 2;
+			}
 
 			return newAccel;
 		}
@@ -3427,6 +3436,54 @@ void SetUpCivCollFlags(void)
 }
 
 // [D] [T]
+#ifndef PSX
+#define CORNER_LOOKAHEAD	9		// route nodes looked at
+#define CORNER_SEGMENTS		3		// segments the heading change of a bend is measured over
+#define CORNER_FULL_TURN	1024	// heading change (4096 = full turn) that needs the lowest speed
+#define CORNER_SLOPE		30		// speed gained per 1000 units of distance before the bend: how late the car may brake
+
+// [A] mission driver: the speed a chased car may carry now, so it can still take the sharpest bend of its route ahead. The fastest
+// limit on a straight, falling to the slowest one for a quarter turn; the allowed speed grows with the distance to the bend.
+int CivCornerSpeed(CAR_DATA* cp)
+{
+	CIV_ROUTE_ENTRY* n = cp->ai.c.pnode;
+	int top = WorldSpeedLimit(2), low = WorldSpeedLimit(0), cap = top;
+	int heading[CORNER_LOOKAHEAD + 1], dist = 0, i;
+
+	if (n == NULL || !IS_NODE_VALID(cp, n))
+		return top;
+
+	heading[0] = cp->hd.direction;
+
+	for (i = 1; i <= CORNER_LOOKAHEAD; i++)
+	{
+		CIV_ROUTE_ENTRY* next = GET_NEXT_NODE(cp, n);
+		int dx = next->x - n->x, dz = next->z - n->z;
+		int turn, speed, from = i > CORNER_SEGMENTS ? i - CORNER_SEGMENTS : 0;
+
+		if (n->pathType == 127 || next->pathType == 127 || (dx == 0 && dz == 0))
+			break;
+
+		if (i == 1)
+		{
+			int cx = next->x - cp->hd.where.t[0], cz = next->z - cp->hd.where.t[2];
+			dist = SquareRoot0(cx * cx + cz * cz);
+		}
+		else
+			dist += SquareRoot0(dx * dx + dz * dz);
+
+		heading[i] = ratan2(dx, dz);
+		turn = ABS(((heading[i] - heading[from] + 2048) & 4095) - 2048);
+		turn = MIN(turn, CORNER_FULL_TURN);
+		speed = top - (top - low) * turn / CORNER_FULL_TURN + dist * CORNER_SLOPE / 1000;
+		cap = MIN(cap, speed);
+		n = next;
+	}
+
+	return MAX(cap, low);
+}
+#endif
+
 int CivAccel(CAR_DATA * cp)
 {
 	CIV_ROUTE_ENTRY* node;

@@ -4,6 +4,8 @@
 #include "cosmetic.h"
 #include "pad.h"
 #include "civ_ai.h"
+#include "objcoll.h"
+#include "cars.h"
 #include "system.h"
 
 #include <SDL.h>
@@ -31,7 +33,13 @@ typedef struct
 #define D1CHASE_REJOIN_DIST	700			// units from the lane at which the civilian AI takes the car again
 #define D1CHASE_GIVE_UP	900			// steps of recovery before the civilian AI gets the car wherever it is
 #define D1CHASE_JAM_FRAMES	90			// steps of the civilian AI without progress before the car backs off
-#define D1CHASE_THRUST	4779			// thrust of the chased car while the throttle is down
+#define D1CHASE_THRUST	4779
+#define D1CHASE_FEEL_BASE	500			// feelers: how far ahead the car looks at a standstill
+#define D1CHASE_FEEL_PER_SPEED	6			// and per unit of speed more
+#define D1CHASE_FEEL_CELL	110			// radius of the free-space check of a feeler (buildings, lamp posts, trees)
+#define D1CHASE_FEEL_CAR	330			// a car this close to a feeler blocks it
+#define D1CHASE_STEER	300				// wheel angle of an evasive turn
+#define D1CHASE_BRAKE	2000			// thrust of the chased car while the throttle is down
 
 static D1CHASE_FRAME* sFrames = NULL;
 static int sFrameCount = 0;
@@ -199,6 +207,23 @@ int D1ChasePath_Step(CAR_DATA* cp)
 		}
 	}
 
+	// the recorded pose lies inside a building of this world (the route comes from another run): never snap the car into it
+	if (sFrame > 0)
+	{
+		VECTOR pose;
+
+		pose.vx = cur->x;
+		pose.vy = cp->hd.where.t[1];
+		pose.vz = cur->z;
+
+		if (QuickBuildingCollisionCheck(&pose, cur->yaw, cp->ap.carCos->colBox.vz, cp->ap.carCos->colBox.vx, 0x14))
+		{
+			printInfo("D1 chase route left after %d frames (building at %d %d), %s drives on\n", sFrame, cur->x, cur->z, sPads ? "the pad stream" : "civilian AI");
+			sRouteOver = 1;
+			return 0;
+		}
+	}
+
 	sPlaced = 1;
 
 	if (sPads == NULL)
@@ -233,6 +258,94 @@ int D1ChasePath_Step(CAR_DATA* cp)
 static int IsChaseCar(CAR_DATA* cp)
 {
 	return cp->inform != NULL && (*cp->inform & TARGET_FLAG_CAR_D1_CHASE);
+}
+
+// a feeler point is blocked by a building or object (grass, pavement and concrete are fine) or by another car
+static int FeelerBlocked(const CAR_DATA* cp, int x, int z)
+{
+	VECTOR pos;
+	int i;
+
+	pos.vx = x;
+	pos.vy = cp->hd.where.t[1];
+	pos.vz = z;
+
+	if (!CellAtPositionEmpty(&pos, D1CHASE_FEEL_CELL))
+		return 1;
+
+	for (i = 0; i < MAX_CARS; i++)
+	{
+		const CAR_DATA* o = &car_data[i];
+		int dx = o->hd.where.t[0] - x, dz = o->hd.where.t[2] - z;
+
+		if (o != cp && o->controlType != CONTROL_TYPE_NONE && dx * dx + dz * dz < D1CHASE_FEEL_CAR * D1CHASE_FEEL_CAR)
+			return 1;
+	}
+
+	return 0;
+}
+
+// feelers ahead of the car (middle near and far, left and right far): 0 = the way is free, else 1 = turn away from the
+// obstacle with *steer (wheel angle, + is right), *brake = too fast for what lies ahead
+static int Feel(const CAR_DATA* cp, int speed, int* steer, int* brake)
+{
+	int reach = D1CHASE_FEEL_BASE + speed * D1CHASE_FEEL_PER_SPEED;
+	int tx = cp->hd.where.t[0], tz = cp->hd.where.t[2];
+	int fx = cp->hd.where.m[0][2], fz = cp->hd.where.m[2][2];		// forward and right axis, 4096 = 1
+	int rx = cp->hd.where.m[0][0], rz = cp->hd.where.m[2][0];
+	int side = reach / 3;
+	int nearBlocked = FeelerBlocked(cp, tx + FIXEDH(fx * (reach / 2)), tz + FIXEDH(fz * (reach / 2)));
+	int farBlocked = FeelerBlocked(cp, tx + FIXEDH(fx * reach), tz + FIXEDH(fz * reach));
+	int left, right;
+
+	*brake = 0;
+
+	if (!nearBlocked && !farBlocked)
+		return 0;
+
+	left = FeelerBlocked(cp, tx + FIXEDH(fx * reach - rx * side), tz + FIXEDH(fz * reach - rz * side));
+	right = FeelerBlocked(cp, tx + FIXEDH(fx * reach + rx * side), tz + FIXEDH(fz * reach + rz * side));
+
+	if (left && right)
+	{
+		*steer = 0;
+		*brake = 1;
+	}
+	else if (left)
+		*steer = D1CHASE_STEER;
+	else if (right)
+		*steer = -D1CHASE_STEER;
+	else
+		*steer = cp->wheel_angle >= 0 ? D1CHASE_STEER : -D1CHASE_STEER;		// both sides free: keep the way the lane steering turns
+
+	// brake in time: a close obstacle at any speed, a far one when fast
+	if (nearBlocked && speed > 40)
+		*brake = 1;
+	else if (farBlocked && speed > WorldSpeedLimit(1))
+		*brake = 1;
+
+	return 1;
+}
+
+// the civilian AI follows the lane and brakes for cars; this adds what it cannot see: it turns away from buildings and
+// objects and slips round cars, over grass and pavement, instead of driving into them at full speed
+void D1ChaseCar_Avoid(CAR_DATA* cp)
+{
+	int steer, brake, speed;
+
+	if (!IsChaseCar(cp) || cp->controlType != CONTROL_TYPE_CIV_AI)
+		return;
+
+	speed = FIXEDH(cp->hd.wheel_speed);
+
+	if (speed < 5 || !Feel(cp, speed, &steer, &brake))
+		return;
+
+	if (steer != 0)
+		cp->wheel_angle = steer;
+
+	if (brake)
+		cp->thrust = -D1CHASE_BRAKE;
 }
 
 // the car stands somewhere off its way (a crash): reverse and drive at the nearest traffic lane, then the civilian AI takes over
@@ -287,7 +400,14 @@ static int Recover(CAR_DATA* cp)
 		steer = -steer;
 	}
 	else
+	{
+		int avoid, brake;
+
 		pad = CAR_PAD_ACCEL;
+
+		if (Feel(cp, FIXEDH(cp->hd.wheel_speed), &avoid, &brake) && avoid != 0)
+			steer = avoid > 0 ? 127 : -127;
+	}
 
 	ProcessCarPad(cp, pad, (char)steer, 1);
 	return 1;

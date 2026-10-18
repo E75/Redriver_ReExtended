@@ -143,6 +143,10 @@ void ImpactDent(CAR_DATA* cp, int hx, int hy, int hz, int value)
 	if (!gImpactDents || model == NULL || value <= 0 || model->num_vertices >= MAX_DENTING_VERTS)
 		return;
 
+	// god mode: the player's car stays whole
+	if (gInvincibleCar && cp->controlType == CONTROL_TYPE_PLAYER)
+		return;
+
 	// sizes are for a Driver 2 car (half length 375), longer cars dent over a larger area
 	scale = cos->colBox.vz * 4096 / 375;
 	depth = MIN(MAX(value - (gImpactDents == 1 ? 0 : DENT_MIN_VALUE), 0) / (gImpactDents == 1 ? DENT_DEPTH_DIV_SENSITIVE : DENT_DEPTH_DIV), DENT_MAX_DEPTH) * scale >> 12;
@@ -273,7 +277,9 @@ void ImpactDent(CAR_DATA* cp, int hx, int hy, int hz, int value)
 	gDentDirty[cp->id] = 1;
 	cp->ap.needsDenting = 1;
 
-	MaybeLoseWheel(cp, hx, hz, value, scale);
+	// wheels only come off in Take a Ride, a mission keeps the car drivable
+	if (GameType == GAME_TAKEADRIVE)
+		MaybeLoseWheel(cp, hx, hz, value, scale);
 }
 
 // a car that leaves (pinged out) or is created loses its dents, so the next car in the slot is whole
