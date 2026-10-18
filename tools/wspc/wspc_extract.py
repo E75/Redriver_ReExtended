@@ -1,4 +1,4 @@
-"""Extract POLICE.IMG (via POLICE.TOC) of the PS1 game World's Scariest Police Chases / Deadly Pursuit.
+"""Extract POLICE.IMG (via POLICE.TOC) of the WSPC data.
 
 Also unpacks every MERGED/*.MRG next to the files (folder MERGED/<name>_MRG/). Format: docs/wspc.md.
 """

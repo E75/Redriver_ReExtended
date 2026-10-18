@@ -1,14 +1,14 @@
-# World's Scariest Police Chases (PS1, Europe) — findings
+# WSPC data formats and DLC
 
-Game: "World's Scariest Police Chases" (EU disc, boot file `SLES_034.25`, executable `POLICEE.EXE`, internal title "Deadly Pursuit - Worlds scariest police chases", build "May 9 2001"). Developer Unique Development Studios, publisher Activision / Fox Interactive. It is **not** the Driver engine: own file formats, no `.LEV`/`.CAR` files. Goal here: import its cars (and maybe its minimap and maps) into Redriver2_ReExtended.
+WSPC uses its own file formats (no `.LEV`/`.CAR` files). Goal: use its cars and map in Redriver2_ReExtended as an optional DLC.
 
-All offsets below are in little endian. Nothing of the game is committed; point the tools at your own copy of the disc files.
+All offsets below are in little endian. Nothing of the game data is committed; point the tools at your own copy of the files.
 
 ## Status
 
 | Part | State |
 |---|---|
-| Disc files (`POLICE.TOC` + `POLICE.IMG`) | decoded, `tools/wspc/wspc_extract.py` |
+| Archive (`POLICE.TOC` + `POLICE.IMG`) | decoded, `tools/wspc/wspc_extract.py` |
 | `.MRG` containers | decoded (same tool) |
 | `.DOB` chunk tree, textures (several pages), meshes | decoded, `tools/wspc/dob2glb.py` (GLB with vertex colours + textures) |
 | Police car | looks right in the three.js viewer (body, window glass, light bar, stripe, wheels) |
@@ -19,13 +19,11 @@ All offsets below are in little endian. Nothing of the game is committed; point 
 | Minimap | no ready made image found (see below) |
 | Import into Redriver | not started |
 
-## Disc layout
+## Archive layout
 
 - `POLICE.TOC` (8248 bytes): entries of `name\0`, `u32 offset`, `u32 size`, back to back. 304 files, offsets into `POLICE.IMG` (266 MB). Directory separator is `\`.
-- Other disc files: `*.STR` (PS1 video, jpsxdec reads them), `POLICE.XA` (audio), `SLES_034.25` (boot stub), `POLICEE.EXE` (the game, PS-X EXE: load address `0x80010000`, text size `0xDE000`, entry `0x800C7F34`).
 - Main groups in the TOC: `VEHICLES\` (78 files), `SCRIPT\` (46, `.SCB` mission scripts, `SCOB`/`SCEV` blocks with readable text), `MENU\` (33), `BACKDROP\` (32, sky per hour and weather), `MERGED\` (16 level archives), `DEBRIEF\`, `CAMPATH\`, `SOUND\`. `_NOTINUSE_*` and `VEHICLES\OLD\` hold leftovers. The developer also left tool names in the TOC (`MERGE.EXE`, `CLUSTER.EXE`).
 - `DAWN.STR`, `DAY.STR`, `NIGHT.STR`, `RAIN.STR` in the TOC are **not video**: each is ≈ 53 MB of streamed city data (see City).
-- Github has only [RooMan-GBM/WSAE](https://github.com/RooMan-GBM/WSAE) (an extractor for the TOC/IMG). No decompilation project exists as of 2026-10-18.
 
 ## `.MRG` (level archive, `MERGED\<time>_<kind>.MRG`)
 
@@ -58,8 +56,6 @@ A chunk is `u32 size` (including these 8 bytes) + `u32 tag`, payload after. Tags
     21  (0x1428 bytes, not decoded)  23, 22  (not decoded)
 ```
 
-Found by decompiling the loader at `0x8001D768` (EXE address space, Ghidra project raw MIPS at base `0x80010000`).
-
 ### Texture page (tag 3)
 
 `u32 header` (the car has `0x1C0000`; the palette byte count below gives 28 CLUTs, so the high half is probably that count), then `256 x 256` pixels at 4 bits per pixel (`0x8000` bytes, low nibble first), then `N` palettes of 16 colours stored as **RGBA32** (`r, g, b, a` bytes; `a` is 1, a colour of all zero is transparent). A material picks the page (`u16` at +0) and the palette (`u16` at +2). `MISC.DOB` has 5 pages with 1, 1, 36, 52 and 38 CLUTs.
@@ -77,7 +73,7 @@ Seen as `i32` words:
 | 8 | `0x1000` (scale 1.0 in 12 bit) |
 | 12 | parent node index, `-1` for the root |
 
-Axes: PS1 is x right, y down, z forward, which is a right handed system, so glTF is a **rotation** `(x, -y, -z)` and the triangle order stays as in the file (the first try with `(x, -y, z)` mirrored the car: text on the doors read backwards). Vertex order in the file is counter clockwise when seen from outside (90 of 93 body triangles have an outward normal).
+Axes: the source is x right, y down, z forward, which is a right handed system, so glTF is a **rotation** `(x, -y, -z)` and the triangle order stays as in the file (the first try with `(x, -y, z)` mirrored the car: text on the doors read backwards). Vertex order in the file is counter clockwise when seen from outside (90 of 93 body triangles have an outward normal).
 
 Police car: node 3 is the body (root), nodes 4 and 5 are two more copies of the body (probably damage states) and are left out. Nodes 0, 1 are low-detail boxes (hull / shadow?) and left out, nodes 2, 6..10 are small body parts (light bar, mirrors, plates, ...), nodes 11..14 are the four wheels: a box ±48 x ±92 x ±92 with a round tyre texture on the two big faces (very dark vertex colour 25/128).
 
@@ -114,16 +110,30 @@ The material number of a quad is the **second** u16 after the vertices. Taking t
 ## City
 
 - `MISC.DOB` (in every `.MRG`) holds only props: 142 nodes, ≈ 1200 triangles (arrows, signs, lamp posts, cones, boards). Positions span x -6879..11731, z -3647..9377 in the same units as the cars. No roads or buildings. Two nodes (53 and the mesh at pool offset 0x341) are not normal meshes (skipped by the converter).
-- The terrain and roads are streamed: the EXE names `DAY.STR`, `DAWN.STR`, `NIGHT.STR`, `RAIN.STR`, `CITY.HDR`, `InitTree`, `SetInitialStreamPos` (loader at `0x80017BF0`, `0x8002DDAC` for `CITY.HDR`). Every `.STR` starts with a copy of `CITY.HDR` (with a leading size dword `0xC2D4`) and has 25846 sectors of 0x800 bytes. Sector 1.. holds u16 lists, later sectors look like 4 bit texture data (`cccccccc`, ...) and packed or compressed data. Only 12 sectors look like a DOB chunk start, so the streamed geometry is another format.
+- The terrain and roads are streamed from `DAY.STR`, `DAWN.STR`, `NIGHT.STR`, `RAIN.STR`, described by `CITY.HDR`. Every `.STR` starts with a copy of `CITY.HDR` (with a leading size dword `0xC2D4`) and has 25846 sectors of 0x800 bytes. Sector 1.. holds u16 lists, later sectors look like 4 bit texture data (`cccccccc`, ...) and packed or compressed data. Only 12 sectors look like a DOB chunk start, so the streamed geometry is another format.
 - `CITY.HDR` (words, offsets must be reduced by 4 for the in-memory copy): `w0 = 677` entries, `w1` table of 677 x 12 bytes (`u32 packed, u32 pointer to a u16 list, u32 packed`), `w2 = 3473` (count of the u16 list at `w3`), `w4/w5` index lists, `w6 = 677`, `w8` table of pointer arrays. Looks like a spatial grid with 677 cells and per cell vertex index lists, the packed values probably hold the sector of the cell in the `.STR`. Not decoded.
 - `_NOTINUSE_MAP\_CITYMAP.MAP` (551 936 bytes = 1024 x 539, mostly nibbles `0x11`, `0x44`, `0x22`) is not a plain bitmap in 4 or 8 bit at width 512, 1024 or 2048. Not decoded; the name says it is not used by the game.
-- Minimap: the game has no minimap image on the disc that was found. A minimap in the Redriver style has to be rendered from the city geometry, so it depends on decoding the stream above.
+- Minimap: no minimap image was found in the data. A minimap in the Redriver style has to be rendered from the city geometry, so it depends on decoding the stream above.
+
+## WSPC DLC in Redriver (decisions)
+
+Same idea as the Driver 1 DLC (`src_rebuild/d1dlc`): optional, the player supplies their own data files, nothing of the game is committed, the base game is not affected when the DLC is off or missing.
+
+- **Engine and gameplay stay Redriver 2.** Only the map and the cars come from WSPC.
+- **Modular:** own library `src_rebuild/wspcdlc/` (detect a `WSPC\` data folder, convert in game, `config.ini` section `[wspcdlc]`). The menu code in `FEmain.c` stays a thin hook.
+- **Menu:** Options → Gameplay → Secret → Extended Settings → Volumetric Effects → D1 DLC → **WSPC DLC**, with items `ON`, `CHECK DLC Folder`, `Convert DLC`.
+- **Driving behaviour:** every WSPC car gets the Redriver car type that fits it best (taxi → taxi, police → cop car, ...). This mapping lives in its own table/file, not in the converter.
+- **Car selection:**
+  - WSPC cars are selectable in every city.
+  - On the WSPC map, Redriver cars (Driver 1 and Driver 2) are selectable too.
+  - Driver 1 and Driver 2 stay strictly separate. **In the Driver 1 map no Driver 2 cars are selectable, for now.** Mixing them may come later.
+- **Work split:** cars first (this document, `tools/wspc/dob2glb.py`); map research, import and conversion scripts run in a separate session.
+- All WSPC work goes on branch `feature/wspc-import` (git worktree next to the main checkout).
 
 ## Tools
 
 - `tools/wspc/wspc_extract.py <game folder> <out folder>`: all files from `POLICE.IMG` and every `.MRG` unpacked.
 - `tools/wspc/dob2glb.py <file.DOB> <out.glb> [node,node,...]`: GLB with the listed nodes (default all), positions scaled by 1/250, axes rotated to glTF, vertex colours and one PNG per used (page, CLUT). Police car: nodes `2,3,6,7,8,9,10,11,12,13,14`. Check it in the viewer first (`bk view` of a folder with the `model.glb`, three.js previewer of the blender skill) before using it in Redriver.
-- Ghidra: import `POLICEE.EXE` as raw binary (strip the first `0x800` header bytes), language `MIPS:LE:32:default`, base `0x80010000`. Useful addresses: `0x80033644` loads `misc.dob`, `0x8001D768` parses a DOB, `0x8001E510` creates an object per node type, `0x800218BC` finds an object by name, `0x80034354` reads a GFX_* texture rectangle, `0x8002ADBC` uploads a texture page, `0x8002DDAC` loads `CITY.HDR`. The polygon drawing runs in GTE assembly (functions around `0x80026380..0x8002BD20`) and decompiles badly; the record layout above was found from the data instead.
 
 ## Learned
 
@@ -131,5 +141,5 @@ The material number of a quad is the **second** u16 after the vertices. Taking t
 - A field that is "plausible" is not proof: the quad material index was wrong for a long time because the first u16 after the vertices looks like an offset too (it is the 4th vertex). Check that every index stays below the list size (min 0, max count - 1).
 - The `DOB` header pairs `(size, tag)` at the file start look like a table of three entries but are the first chunks of the tree; sizes include the 8 header bytes.
 - A first guess "the header gives the vertex count" was wrong: the sub-meshes have their own header with `nVerts` at `+4`.
-- PS1 coordinates to glTF is a rotation, not a flip of one axis (a flip mirrors the model and the text on it).
+- Source coordinates to glTF is a rotation, not a flip of one axis (a flip mirrors the model and the text on it).
 - Python helpers that write a file they read: read into a variable first, else the file is truncated.

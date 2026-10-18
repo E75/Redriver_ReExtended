@@ -1,4 +1,4 @@
-"""World's Scariest Police Chases (PS1) .DOB vehicle -> GLB (geometry, vertex colours, CLUT textures, flat node list).
+"""WSPC .DOB vehicle -> GLB (geometry, vertex colours, CLUT textures, flat node list).
 
 Format notes: docs/wspc.md.
 """
@@ -200,7 +200,7 @@ class GlbBuilder:
 
 
 def node_groups(verts: list[tuple[int, int, int]], materials: list[Material], prims: list[Prim]) -> dict[tuple[int, int], tuple[list[float], list[float], list[float]]]:
-    """Triangles per (page, CLUT): positions (PS1 x right, y down, z forward -> glTF by rotating (x, -y, -z), winding kept), vertex colours (0x80 = 1.0), uv."""
+    """Triangles per (page, CLUT): positions (source x right, y down, z forward -> glTF by rotating (x, -y, -z), winding kept), vertex colours (0x80 = 1.0), uv."""
     groups: dict[tuple[int, int], tuple[list[float], list[float], list[float]]] = {}
     for prim in prims:
         material = materials[prim.material] if prim.material < len(materials) else Material(0, 0, [(0, 0)] * 4)
