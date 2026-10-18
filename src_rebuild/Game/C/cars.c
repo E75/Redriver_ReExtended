@@ -445,11 +445,18 @@ int gCarGloss = 1;	// config.ini [render] carGloss: the sun mirrors in the paint
 #define CAR_REFLECT_OVERCAST	0.55f	// environment reflection that remains without a sun: wet paint under a grey sky
 #define CAR_REFLECT_FOG		0.30f	// the same in fog and falling snow
 
+int gCarSmooth = 1;				// config.ini [render] carSmooth: near cars get their gloss on triangles cut in four, so highlights run smoothly over the panels
+#define CAR_SMOOTH_DISTANCE	6000	// view z under which a car is cut finer
+#define CAR_SMOOTH_MAX_CARS	6		// cars per frame that get the fine gloss (prim buffer)
+
 int gCarReflection = 1;			// config.ini [render] carReflection: the sky, the horizon and a wet sheen mirror in the paint, also without sun
 
 static int sGlossOn;				// the car being drawn gets gloss
 static float sGlossGain;			// sun strength x distance fade
 static float sEnvGain;				// environment reflection (sky, horizon) x distance fade: stays in rain and fog
+static int sSmooth;					// the car being drawn gets the fine gloss
+static int sSmoothCars;				// fine gloss cars this frame
+static int sSmoothFrame = -1;
 static float sWet;					// 1 = wet paint (rain, wet road): the sky reflection is stronger
 static float sCarM[3][3];			// model space to view space of the car being drawn (scaled to 1)
 static float sSun[3], sEye[3], sHalf[3], sUp[3];	// sun, camera, half way vector and world up in view space
@@ -503,6 +510,15 @@ static void SetupCarGloss(CAR_DATA* cp, MATRIX* carMat, VECTOR* pos)
 
 	if (sEnvGain < 0.02f)
 		return;
+
+	if (sSmoothFrame != FrameCnt)
+	{
+		sSmoothFrame = FrameCnt;
+		sSmoothCars = 0;
+	}
+
+	sSmooth = gCarSmooth && pos->vz < CAR_SMOOTH_DISTANCE && sSmoothCars < CAR_SMOOTH_MAX_CARS;
+	sSmoothCars += sSmooth;
 
 	// the fixed dawn and dusk sun stands lower than its position says: the same rule as SunShadow, so the spot sits where the shadow points
 	if (!DayCycleActive() && (gTimeOfDay == TIME_DAWN || gTimeOfDay == TIME_DUSK))
@@ -627,6 +643,24 @@ static int GlossNearLamp(const SVECTOR* v)
 // Second pass over the body and the parts under it: an additive white layer with the gloss as vertex colour, built from the
 // same (dented) vertices as the car itself. All polygons share one ordering slot just in front of the car, preceded by a
 // primitive that switches the blend mode to additive.
+// one additive gloss triangle from three screen points and three gloss values
+static POLY_G3* GlossTri(POLY_G3* prim, const short* a, const short* b, const short* c, int ga, int gb, int gc)
+{
+	if (ga + gb + gc < 12)
+		return prim;
+
+	setPolyG3(prim);
+	setSemiTrans(prim, 1);
+	prim->r0 = prim->g0 = prim->b0 = ga;
+	prim->r1 = prim->g1 = prim->b1 = gb;
+	prim->r2 = prim->g2 = prim->b2 = gc;
+	prim->x0 = a[0]; prim->y0 = a[1];
+	prim->x1 = b[0]; prim->y1 = b[1];
+	prim->x2 = c[0]; prim->y2 = c[1];
+
+	return prim + 1;
+}
+
 static void plotCarGloss(CAR_MODEL* car, plotCarGlobals* pg)
 {
 	int Z, otz, slot = 0x7fffffff;
@@ -678,7 +712,7 @@ static void plotCarGloss(CAR_MODEL* car, plotCarGlobals* pg)
 			SVECTOR* v0 = vlist + (indices & 0xff);
 			SVECTOR* v1 = vlist + (indices >> 8 & 0xff);
 			SVECTOR* v2 = vlist + (indices >> 16 & 0xff);
-			float face[3], n[3];
+			float face[3], n[3], nk[3][3];
 			int g[3], k;
 
 			gte_ldv3(v0, v1, v2);
@@ -722,6 +756,7 @@ static void plotCarGloss(CAR_MODEL* car, plotCarGlobals* pg)
 				}
 
 				GlossNormalize(n);
+				nk[k][0] = n[0]; nk[k][1] = n[1]; nk[k][2] = n[2];
 
 				// no gloss on a lamp lens: fade it out per corner instead of dropping the whole triangle
 				g[k] = GlossNearLamp(v) ? 0 : GlossAt(n);
@@ -730,15 +765,45 @@ static void plotCarGloss(CAR_MODEL* car, plotCarGlobals* pg)
 			if (g[0] + g[1] + g[2] < 12)
 				continue;
 
-			setPolyG3(prim);
-			setSemiTrans(prim, 1);
-			prim->r0 = prim->g0 = prim->b0 = g[0];
-			prim->r1 = prim->g1 = prim->b1 = g[1];
-			prim->r2 = prim->g2 = prim->b2 = g[2];
-			gte_stsxy3(&prim->x0, &prim->x1, &prim->x2);
-
 			slot = MIN(slot, otz >> 1);
-			prim++;
+
+			if (sSmooth)
+			{
+				// cut in four: the gloss is worked out again at the edge middles from the blended normals, so a highlight is not
+				// stretched between three corners
+				short s[3][2], m[3][2];
+				int gm[3];
+
+				gte_stsxy3(&s[0][0], &s[1][0], &s[2][0]);
+
+				for (k = 0; k < 3; k++)
+				{
+					const float* p = nk[k], *q = nk[(k + 1) % 3];
+					float nm[3] = { p[0] + q[0], p[1] + q[1], p[2] + q[2] };
+
+					m[k][0] = (s[k][0] + s[(k + 1) % 3][0]) / 2;
+					m[k][1] = (s[k][1] + s[(k + 1) % 3][1]) / 2;
+					GlossNormalize(nm);
+					gm[k] = GlossAt(nm);
+				}
+
+				// edge k runs from corner k to corner k + 1; a middle next to a lamp stays dark with its corners
+				if (g[0] == 0 || g[1] == 0) gm[0] = 0;
+				if (g[1] == 0 || g[2] == 0) gm[1] = 0;
+				if (g[2] == 0 || g[0] == 0) gm[2] = 0;
+
+				prim = GlossTri(prim, s[0], m[0], m[2], g[0], gm[0], gm[2]);
+				prim = GlossTri(prim, m[0], s[1], m[1], gm[0], g[1], gm[1]);
+				prim = GlossTri(prim, m[2], m[1], s[2], gm[2], gm[1], g[2]);
+				prim = GlossTri(prim, m[0], m[1], m[2], gm[0], gm[1], gm[2]);
+			}
+			else
+			{
+				short s[3][2];
+
+				gte_stsxy3(&s[0][0], &s[1][0], &s[2][0]);
+				prim = GlossTri(prim, s[0], s[1], s[2], g[0], g[1], g[2]);
+			}
 		}
 	}
 
