@@ -9,10 +9,10 @@ import zlib
 from dataclasses import dataclass
 from pathlib import Path
 
+from wspc_prims import Prim, read_prims
+
 SCALE = 1 / 250.0
 CONTAINER_TAGS = (1, 2, 4)
-RECORD_SIZE = {3: 24, 7: 28, 11: 24, 15: 32}   # primitive bytes per group type
-FLAGS2_BIG_QUAD = 128                          # group flag with 36 byte records (seen once, unchecked)
 PNG_SIGNATURE = b'\x89PNG\r\n\x1a\n'
 
 
@@ -21,13 +21,6 @@ class Node:
     pool_offset: int
     position: tuple[int, int, int]
     parent: int
-
-
-@dataclass
-class Prim:
-    indices: list[int]
-    colours: list[tuple[int, int, int]]
-    material: int
 
 
 @dataclass
@@ -114,35 +107,7 @@ def read_mesh(data: bytes, pool: int, offset: int) -> tuple[list[tuple[int, int,
         m = data[material_at + 16 * j:material_at + 16 * j + 16]
         page, clut = struct.unpack_from('<HH', m, 0)
         materials.append(Material(page, clut, [(m[4 + 2 * k], m[5 + 2 * k]) for k in range(4)]))
-    prims: list[Prim] = []
-    sub_at = base + u32(base + 0xc)
-    for i in range(data[base]):
-        sub = sub_at + 0x14 * i
-        for list_off in (0xc, 0x10):
-            pointer = u32(sub + list_off)
-            if not pointer:
-                continue
-            head = base + pointer
-            table = base + u32(head + 4)
-            for j in range(struct.unpack_from('<h', data, head)[0]):
-                entry = table + 8 * j
-                kind, count = data[entry], data[entry + 3]
-                verts_per_prim = 4 if kind & 4 else 3
-                size = RECORD_SIZE.get(kind, 8 + verts_per_prim * 4 + 4)
-                if data[entry + 2] == FLAGS2_BIG_QUAD:
-                    size = 36
-                first = base + u32(entry + 4)
-                for k in range(count):
-                    rec = first + k * size
-                    indices, colours = [], []
-                    for v in range(verts_per_prim):
-                        r, g, b, index = data[rec + 8 + 4 * v:rec + 12 + 4 * v]
-                        indices.append(index)
-                        colours.append((r, g, b))
-                    # quads repeat their 4th vertex (offset * 8) first, so the material offset is the second u16
-                    material_at = rec + 8 + verts_per_prim * 4 + (2 if verts_per_prim == 4 else 0)
-                    material = struct.unpack_from('<H', data, material_at)[0] // 16
-                    prims.append(Prim(indices, colours, material))
+    prims = read_prims(data, base, base)
     return verts, materials, prims
 
 
@@ -200,7 +165,7 @@ class GlbBuilder:
 
 
 def node_groups(verts: list[tuple[int, int, int]], materials: list[Material], prims: list[Prim]) -> dict[tuple[int, int], tuple[list[float], list[float], list[float]]]:
-    """Triangles per (page, CLUT): positions (source x right, y down, z forward -> glTF by rotating (x, -y, -z), winding kept), vertex colours (0x80 = 1.0), uv."""
+    """Triangles per (page, CLUT): positions (source data x right, y down, z forward -> glTF by rotating (x, -y, -z), winding kept), vertex colours (0x80 = 1.0), uv."""
     groups: dict[tuple[int, int], tuple[list[float], list[float], list[float]]] = {}
     for prim in prims:
         material = materials[prim.material] if prim.material < len(materials) else Material(0, 0, [(0, 0)] * 4)
