@@ -32,6 +32,7 @@ class Prim:
 
 @dataclass
 class Material:
+    page: int
     clut: int
     uv: list[tuple[int, int]]
 
@@ -73,25 +74,28 @@ def png(width: int, height: int, rgba: bytes) -> bytes:
     return PNG_SIGNATURE + chunk(b'IHDR', header) + chunk(b'IDAT', zlib.compress(raw, 6)) + chunk(b'IEND', b'')
 
 
-def texture_pages(data: bytes, by_tag: dict[int, list[tuple[int, int]]]) -> list[bytes]:
-    """Tag 3: u32 header, 256x256 4bpp pixels, then CLUTs of 16 RGBA32 colours; one PNG per CLUT."""
-    off, size = by_tag[3][0]
-    start = off + 8
-    pixels = data[start + 4:start + 4 + 0x8000]
-    palette = data[start + 4 + 0x8000:off + size]
-    indices = bytearray(0x10000)
-    for i, byte in enumerate(pixels):
-        indices[2 * i] = byte & 15
-        indices[2 * i + 1] = byte >> 4
+def texture_pages(data: bytes, by_tag: dict[int, list[tuple[int, int]]]) -> list[tuple[bytearray, bytes]]:
+    """Every tag 3 chunk: u32 header, 256x256 4bpp pixels, then CLUTs of 16 RGBA32 colours -> (pixel indices, palette)."""
     pages = []
-    for clut in range(len(palette) // 64):
-        colours = palette[clut * 64:(clut + 1) * 64]
-        rgba = bytearray()
-        for index in indices:
-            r, g, b, a = colours[4 * index:4 * index + 4]
-            rgba += bytes((r, g, b, 0 if (r, g, b, a) == (0, 0, 0, 0) else 255))
-        pages.append(png(256, 256, bytes(rgba)))
+    for off, size in by_tag[3]:
+        start = off + 8
+        indices = bytearray(0x10000)
+        for i, byte in enumerate(data[start + 4:start + 4 + 0x8000]):
+            indices[2 * i] = byte & 15
+            indices[2 * i + 1] = byte >> 4
+        pages.append((indices, data[start + 4 + 0x8000:off + size]))
     return pages
+
+
+def page_png(pages: list[tuple[bytearray, bytes]], page: int, clut: int) -> bytes:
+    """One page drawn with one CLUT (colour 0,0,0,0 is transparent); out-of-range numbers fall back to 0."""
+    indices, palette = pages[page if page < len(pages) else 0]
+    colours = palette[clut * 64:(clut + 1) * 64] if clut * 64 < len(palette) else palette[:64]
+    rgba = bytearray()
+    for index in indices:
+        r, g, b, a = colours[4 * index:4 * index + 4]
+        rgba += bytes((r, g, b, 0 if (r, g, b, a) == (0, 0, 0, 0) else 255))
+    return png(256, 256, bytes(rgba))
 
 
 def read_mesh(data: bytes, pool: int, offset: int) -> tuple[list[tuple[int, int, int]], list[Material], list[Prim]]:
@@ -108,7 +112,8 @@ def read_mesh(data: bytes, pool: int, offset: int) -> tuple[list[tuple[int, int,
     materials = []
     for j in range(material_count):
         m = data[material_at + 16 * j:material_at + 16 * j + 16]
-        materials.append(Material(struct.unpack_from('<H', m, 2)[0], [(m[4 + 2 * k], m[5 + 2 * k]) for k in range(4)]))
+        page, clut = struct.unpack_from('<HH', m, 0)
+        materials.append(Material(page, clut, [(m[4 + 2 * k], m[5 + 2 * k]) for k in range(4)]))
     prims: list[Prim] = []
     sub_at = base + u32(base + 0xc)
     for i in range(data[base]):
@@ -134,13 +139,15 @@ def read_mesh(data: bytes, pool: int, offset: int) -> tuple[list[tuple[int, int,
                         r, g, b, index = data[rec + 8 + 4 * v:rec + 12 + 4 * v]
                         indices.append(index)
                         colours.append((r, g, b))
-                    material = struct.unpack_from('<H', data, rec + 8 + verts_per_prim * 4)[0] // 16
+                    # quads repeat their 4th vertex (offset * 8) first, so the material offset is the second u16
+                    material_at = rec + 8 + verts_per_prim * 4 + (2 if verts_per_prim == 4 else 0)
+                    material = struct.unpack_from('<H', data, material_at)[0] // 16
                     prims.append(Prim(indices, colours, material))
     return verts, materials, prims
 
 
 class GlbBuilder:
-    def __init__(self, pages: list[bytes]) -> None:
+    def __init__(self, pages: list[tuple[bytearray, bytes]]) -> None:
         self.pages = pages
         self.blob = bytearray()
         self.views: list[dict] = []
@@ -148,7 +155,7 @@ class GlbBuilder:
         self.images: list[bytes] = []
         self.textures: list[dict] = []
         self.materials: list[dict] = []
-        self.clut_material: dict[int, int] = {}
+        self.clut_material: dict[tuple[int, int], int] = {}
 
     def add(self, values: list[float], count: int, kind: str, bounds: tuple[list[float], list[float]] | None = None) -> int:
         self.blob.extend(b'\0' * (-len(self.blob) % 4))
@@ -161,16 +168,16 @@ class GlbBuilder:
         self.accessors.append(accessor)
         return len(self.accessors) - 1
 
-    def material(self, clut: int) -> int:
-        clut = clut if clut < len(self.pages) else 0
-        if clut not in self.clut_material:
-            self.images.append(self.pages[clut])
+    def material(self, page: int, clut: int) -> int:
+        key = (page, clut)
+        if key not in self.clut_material:
+            self.images.append(page_png(self.pages, page, clut))
             self.textures.append(dict(source=len(self.images) - 1, sampler=0))
             self.materials.append(dict(
-                name=f'clut{clut}', alphaMode='MASK', alphaCutoff=0.5, doubleSided=True,
+                name=f'page{page}_clut{clut}', alphaMode='MASK', alphaCutoff=0.5, doubleSided=True,
                 pbrMetallicRoughness=dict(baseColorTexture=dict(index=len(self.textures) - 1), metallicFactor=0, roughnessFactor=0.9)))
-            self.clut_material[clut] = len(self.materials) - 1
-        return self.clut_material[clut]
+            self.clut_material[key] = len(self.materials) - 1
+        return self.clut_material[key]
 
     def finish(self, nodes: list[dict], meshes: list[dict]) -> bytes:
         image_defs = []
@@ -192,19 +199,19 @@ class GlbBuilder:
                 + struct.pack('<II', len(self.blob), 0x004E4942) + bytes(self.blob))
 
 
-def node_groups(verts: list[tuple[int, int, int]], materials: list[Material], prims: list[Prim]) -> dict[int, tuple[list[float], list[float], list[float]]]:
-    """Triangles per CLUT: positions (Y flipped, winding reversed), vertex colours (0x80 = 1.0), uv."""
-    groups: dict[int, tuple[list[float], list[float], list[float]]] = {}
+def node_groups(verts: list[tuple[int, int, int]], materials: list[Material], prims: list[Prim]) -> dict[tuple[int, int], tuple[list[float], list[float], list[float]]]:
+    """Triangles per (page, CLUT): positions (PS1 x right, y down, z forward -> glTF by rotating (x, -y, -z), winding kept), vertex colours (0x80 = 1.0), uv."""
+    groups: dict[tuple[int, int], tuple[list[float], list[float], list[float]]] = {}
     for prim in prims:
-        material = materials[prim.material] if prim.material < len(materials) else Material(0, [(0, 0)] * 4)
+        material = materials[prim.material] if prim.material < len(materials) else Material(0, 0, [(0, 0)] * 4)
         triangles = [(0, 1, 2)] if len(prim.indices) == 3 else [(0, 1, 2), (1, 3, 2)]
         for tri in triangles:
             if any(prim.indices[k] >= len(verts) for k in tri):
                 continue
-            positions, colours, uvs = groups.setdefault(material.clut, ([], [], []))
-            for k in (tri[0], tri[2], tri[1]):
+            positions, colours, uvs = groups.setdefault((material.page, material.clut), ([], [], []))
+            for k in tri:
                 x, y, z = verts[prim.indices[k]]
-                positions.extend((x * SCALE, -y * SCALE, z * SCALE))
+                positions.extend((x * SCALE, -y * SCALE, -z * SCALE))
                 colours.extend([min(1.0, c / 128.0) for c in prim.colours[k]] + [1.0])
                 u, v = material.uv[k]
                 uvs.extend(((u + 0.5) / 256.0, (v + 0.5) / 256.0))
@@ -219,17 +226,21 @@ def build(path: Path, out: Path, only: set[int] | None) -> None:
     for index, node in enumerate(nodes):
         if only is not None and index not in only:
             continue
-        verts, materials, prims = read_mesh(data, pool, node.pool_offset)
+        try:
+            verts, materials, prims = read_mesh(data, pool, node.pool_offset)
+        except struct.error:
+            print(f'node {index}: offset 0x{node.pool_offset:x} is not a normal mesh, skipped')
+            continue
         x, y, z = node.position
-        gltf_node = dict(name=f'n{index}', translation=[x * SCALE, -y * SCALE, z * SCALE])
+        gltf_node = dict(name=f'n{index}', translation=[x * SCALE, -y * SCALE, -z * SCALE])
         primitives = []
-        for clut, (positions, colours, uvs) in node_groups(verts, materials, prims).items():
+        for (page, clut), (positions, colours, uvs) in node_groups(verts, materials, prims).items():
             count = len(positions) // 3
             bounds = ([min(positions[a::3]) for a in range(3)], [max(positions[a::3]) for a in range(3)])
             primitives.append(dict(
                 attributes=dict(POSITION=builder.add(positions, count, 'VEC3', bounds), COLOR_0=builder.add(colours, count, 'VEC4'),
                                 TEXCOORD_0=builder.add(uvs, count, 'VEC2')),
-                material=builder.material(clut)))
+                material=builder.material(page, clut)))
         print(f'node {index}: offset 0x{node.pool_offset:x} parent {node.parent} verts {len(verts)} prims {len(prims)}')
         if primitives:
             meshes.append(dict(primitives=primitives))
