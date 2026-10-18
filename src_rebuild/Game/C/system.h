@@ -175,6 +175,9 @@ extern int gWspcDlcPrepared;
 extern int gWspcDlcCarMask;
 extern int WspcDlc_CheckData();
 extern void WspcDlc_SaveConfig();
+extern void WspcDlc_CarFolder(int car, char* path, int size);
+extern int WspcDlc_DonorModel(int car);
+extern const char* WspcDlc_CarTitle(int car);
 
 // Driver 1 missions (src_rebuild/d1dlc/d1_missions.h)
 extern bool D1Missions_Available();

@@ -8,7 +8,8 @@
 #define WSPCDLC_DATA_FOLDER			"WSPC\\"
 #define WSPCDLC_VEHICLES_FOLDER		"WSPC\\VEHICLES\\"
 #define WSPCDLC_CONVERTED_FOLDER	"WSPC\\CONVERTED\\"
-#define WSPCDLC_CONVERTER_VERSION	1	// bump when the output format changes -> forces reconversion
+#define WSPCDLC_CONVERTER_VERSION	4	// bump when the output format changes -> forces reconversion
+#define WSPCDLC_CAR_SCALE			0.55	// source units to Redriver units: a Redriver car is about 750 units long (half length 375)
 
 // Redriver driving behaviour that fits a WSPC car best; the table is in wspc_cars.cpp
 enum WspcBehaviour
@@ -47,6 +48,10 @@ void WspcDlc_SaveConfig();		// writes the [wspcdlc] section of config.ini
 
 // Redriver files of a converted car: <install>\WSPC\CONVERTED\<NAME>\ (CLEAN.MDL, DAMAGED.MDL, LOW.MDL, TEXTURE.BIN, CAR.INFO)
 void WspcDlc_CarFolder(int car, char* path, int size);
+
+// Driver 2 car model whose handling the WSPC car borrows (wspc_cars.cpp)
+int WspcDlc_DonorModel(int car);
+const char* WspcDlc_CarTitle(int car);
 
 // Converter messages of the last WspcDlc_CheckData call.
 const char* WspcDlc_LastLog();

@@ -29,6 +29,14 @@ Rules: the base game must not change when the DLC is off or missing. Never commi
 - Checked: the converted files read back by an independent script (`.MDL` + `TEXTURE.BIN` to GLB) look right in the three.js viewer (police car, 17 palettes, 142 vertices, 123 polygons). 16 of 17 vehicles convert (1 page, at most 19 palettes, at most 176 vertices); the tank has 348 vertices and no wheels (tracks), so it needs its own handling.
 - Not done: Gouraud polygons (the source has vertex colours, FT polygons give one colour), damaged model from the source damage copies, low detail model, per car node tables after looking at each car.
 
+## Steps 2 to 4 status (first loading in game)
+
+- Library `src_rebuild/wspcdlc/`: `wspc_convert.cpp` is the C++ port of `wspc2car.py` (the output is byte identical for all 16 cars), `wspc_cars.cpp` holds the car table and the donor choice (cops borrow the cop car, the rest the first traffic car), `wspcdlc.cpp` the detection, `[wspcdlc]` config and the check. Menu: Extended Settings - WSPC DLC (Off / On / Check DLC Folder).
+- Engine side only in `Game/C/wspccar.c`: builds a car models lump of one car in memory, loads the two texture pages raw into the special slot (foreign page numbers), borrows and scales the cosmetics of the donor car, builds the damage zones from the model (`D1BuildDamageZones`). The car spawner (debug) lists the WSPC cars after the Driver 2 cars; the special slot then holds model number 12.
+- Checked in game (Chicago, car spawner, private build): the police car loads and is drawn with the Redriver wheels. Sizes: scale 0.55, models centred on their bounding box.
+- Findings: the special slot memory is 11768 bytes, so only the clean model carries point normals, the damaged one only vertices and the low detail one vertices and polygons (the engine copies the part before the polygons and reads the polygons from the file buffer). Groups with flags2 128 have normal 28 byte records (a 36 byte guess was wrong).
+- Not done: car select menu entries and the Take a Ride flow, Driver 1 cities, per car donors, wheel and lamp positions by eye, driving test, damage test, sound bank.
+
 ## Open
 
 - How many pages a WSPC car needs after mapping to 2 pages (police car uses several pages with different palettes).

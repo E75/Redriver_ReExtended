@@ -18,6 +18,7 @@
 #include "pad.h"
 #include "main.h"
 #include "shadow.h"
+#include "wspccar.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -47,11 +48,14 @@ extern int GetNodePos(DRIVER2_STRAIGHT* straight, DRIVER2_JUNCTION* junction, DR
 #define LUMP_TEXTUREINFO_TYPE	34
 #define SPOT_STEP		1500
 #define SPOT_RINGS		9
+#define WSPC_SPAWN_CITY		100		// 'city' of a WSPC DLC car
+#define WSPC_SPECIAL_MODEL	12		// model number of the special slot while it holds a WSPC car: no other slot has it
 
 typedef struct
 {
 	short city;		// the Driver 2 city a special car belongs to (the loaded city for every other car)
 	short model;
+	short wspc;		// WSPC DLC car (index in g_WspcCars), -1 for every other car
 	char name[32];
 } SPAWN_CAR;
 
@@ -79,9 +83,18 @@ static void AddCar(int city, int model, const char* name)
 
 	spawnList[spawnCount].city = city;
 	spawnList[spawnCount].model = model;
+	spawnList[spawnCount].wspc = -1;
 	strncpy(spawnList[spawnCount].name, name, sizeof(spawnList[spawnCount].name) - 1);
 	spawnList[spawnCount].name[sizeof(spawnList[spawnCount].name) - 1] = 0;
 	spawnCount++;
+}
+
+static void AddWspcCar(int car)
+{
+	AddCar(WSPC_SPAWN_CITY, WSPC_SPECIAL_MODEL, WspcDlc_CarTitle(car));
+
+	if (spawnCount > 0 && spawnList[spawnCount - 1].city == WSPC_SPAWN_CITY)
+		spawnList[spawnCount - 1].wspc = car;
 }
 
 static void BuildList(void)
@@ -138,6 +151,16 @@ static void BuildList(void)
 	}
 
 	AddCar(GameLevel, 12, "Secret car");
+
+	// the converted WSPC DLC cars (Driver 2 cities only for now)
+	if (gWspcDlcEnabled)
+	{
+		for (i = 0; i < 16; i++)
+		{
+			if (gWspcDlcCarMask & (1 << i))
+				AddWspcCar(i);
+		}
+	}
 }
 
 // the spot: the road next to the player, a lane at the kerb of a straight with room to spare
@@ -203,8 +226,8 @@ static void ClearSpecialSlotCars(void)
 	PingOutCivsOnly = oldMode;
 }
 
-// cosmetics and damage zones of a Driver 2 car that is no special: the files of the city
-static int LoadD2SlotData(int model)
+// cosmetics of a Driver 2 car of this city for the special slot: the file of the city
+int LoadD2SlotCosmetics(int model)
 {
 	char* buf = (char*)malloc(12727);
 	int offset;
@@ -216,6 +239,22 @@ static int LoadD2SlotData(int model)
 	offset = *(int*)(buf + model * sizeof(int));
 	car_cosmetics[SPECIAL_CAR_SLOT] = *(CAR_COSMETICS*)(buf + offset);
 	FixCarCos(&car_cosmetics[SPECIAL_CAR_SLOT], model);
+
+	free(buf);
+	return 1;
+}
+
+// cosmetics and damage zones of a Driver 2 car that is no special: the files of the city
+static int LoadD2SlotData(int model)
+{
+	char* buf = (char*)malloc(12727);
+	int offset;
+
+	if (!buf || !LoadD2SlotCosmetics(model))
+	{
+		free(buf);
+		return 0;
+	}
 
 	LoadfileSeg(DentingFiles[GameLevel], buf, 0, 12727);
 	offset = *(int*)(buf + model * sizeof(int));
@@ -389,6 +428,33 @@ done:
 	return ok;
 }
 
+// a WSPC DLC car takes the special slot; its model number is WSPC_SPECIAL_MODEL, which no other slot has
+static int PrepareWspc(const SPAWN_CAR* c)
+{
+	if (slotCity == WSPC_SPAWN_CITY && slotModel == c->wspc && gCarCleanModelPtr[SPECIAL_CAR_SLOT])
+		return 1;
+
+	ClearSpecialSlotCars();
+
+	// the special spool must not fill the slot again behind the player's back
+	allowSpecSpooling = 0;
+	AbortSpecialSpool();
+	ResumeSpecialSpool();
+
+	if (residentCarModels[SPECIAL_CAR_SLOT] == 13)
+		ChopperSlotTaken();
+
+	ForeignCarClear();
+
+	if (!WspcCar_LoadIntoSlot(c->wspc))
+		return 0;
+
+	residentCarModels[SPECIAL_CAR_SLOT] = c->model;
+	slotCity = WSPC_SPAWN_CITY;
+	slotModel = c->wspc;
+	return 1;
+}
+
 // makes 'model' of the car list a resident car; returns 0 when it cannot be loaded
 static int PrepareModelInner(const SPAWN_CAR* c)
 {
@@ -402,6 +468,9 @@ static int PrepareModelInner(const SPAWN_CAR* c)
 	}
 
 	slotFrame = FrameCnt;
+
+	if (c->wspc >= 0)
+		return PrepareWspc(c);
 
 	if (model <= 4)
 	{

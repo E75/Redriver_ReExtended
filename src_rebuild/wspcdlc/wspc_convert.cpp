@@ -1,4 +1,5 @@
 #include "wspc_convert.h"
+#include "wspcdlc.h"
 #include "../d1dlc/d1_util.h"
 
 #include <math.h>
@@ -110,8 +111,6 @@ bool ReadMesh(const Bytes& d, size_t pool, int offset, Mesh& mesh)
 				int kind = d.U8(entry), count = d.U8(entry + 3);
 				int vpp = (kind & 4) ? 4 : 3;
 				int size = kind == 3 || kind == 11 ? 24 : kind == 7 ? 28 : kind == 15 ? 32 : 8 + vpp * 4 + 4;
-				if (d.U8(entry + 2) == 128)
-					size = 36;
 
 				size_t first = base + d.Get<uint32_t>(entry + 4);
 				for (int k = 0; k < count && !d.bad; k++)
@@ -217,7 +216,9 @@ void PutShorts(std::vector<char>& dst, int a, int b, int c, int d)
 }
 
 // MODEL file: header, vertices, point normals, polygons (FT3 / FT4), face normals
-std::vector<char> BuildModel(const CarData& car, const std::vector<std::pair<int, int>>& textureOf)
+enum ModelKind { MODEL_CLEAN, MODEL_DAMAGED, MODEL_LOW };
+
+std::vector<char> BuildModel(const CarData& car, const std::vector<std::pair<int, int>>& textureOf, ModelKind kind)
 {
 	int count = (int)car.verts.size();
 	std::vector<char> polyBytes, faceNormals;
@@ -269,9 +270,20 @@ std::vector<char> BuildModel(const CarData& car, const std::vector<std::pair<int
 		}
 	}
 
+	// The engine copies the part before the polygons into the special slot (the polygons stay in the file buffer), so the damaged
+	// and the low detail model carry only what they need: vertices, and the polygons of the low detail one.
+	bool clean = kind == MODEL_CLEAN;
+	int numPolys = kind == MODEL_DAMAGED ? 0 : (int)car.polys.size();
+
+	if (kind == MODEL_DAMAGED)
+		polyBytes.clear();
+
+	if (!clean)
+		faceNormals.clear();
+
 	int vertexAt = MODEL_HEADER;
-	int pointAt = vertexAt + 8 * count;
-	int polyAt = pointAt + 8 * count;
+	int pointAt = clean ? vertexAt + 8 * count : vertexAt;
+	int polyAt = vertexAt + 8 * count + (clean ? 8 * count : 0);
 	int normalsAt = polyAt + (int)polyBytes.size();
 
 	double radius = 0.0;
@@ -279,7 +291,7 @@ std::vector<char> BuildModel(const CarData& car, const std::vector<std::pair<int
 		radius = std::max(radius, sqrt((double)v.x * v.x + (double)v.y * v.y + (double)v.z * v.z));
 
 	std::vector<char> out;
-	uint16_t shapeFlags = 0, flags2 = 0, numPointNormals = (uint16_t)count, numVertices = (uint16_t)count, numPolys = (uint16_t)car.polys.size();
+	uint16_t shapeFlags = 0, flags2 = 0, numPointNormals = (uint16_t)count, numVertices = (uint16_t)count, numPolysShort = (uint16_t)numPolys;
 	int16_t instance = -1, boundingSphere = (int16_t)radius;
 	uint8_t triVerts = 0, zBias = 0;
 	int32_t offsets[5] = { vertexAt, polyAt, normalsAt, pointAt, 0 };
@@ -292,13 +304,13 @@ std::vector<char> BuildModel(const CarData& car, const std::vector<std::pair<int
 	Put(out, boundingSphere);
 	Put(out, numPointNormals);
 	Put(out, numVertices);
-	Put(out, numPolys);
+	Put(out, numPolysShort);
 	Put(out, offsets, sizeof(offsets));
 
 	for (const Vec& v : car.verts)
 		PutShorts(out, v.x, v.y, v.z, 0);
 
-	for (int i = 0; i < count; i++)
+	for (int i = 0; clean && i < count; i++)
 	{
 		int16_t unit[3];
 		Unit(pointSum[i * 3], pointSum[i * 3 + 1], pointSum[i * 3 + 2], unit);
@@ -391,7 +403,7 @@ bool Wspc_ConvertCar(const char* dobPath, const char* outFolder, std::string& lo
 		int firstVert = (int)car.verts.size(), materialBase = (int)car.materials.size();
 		car.materials.insert(car.materials.end(), mesh.materials.begin(), mesh.materials.end());
 		for (auto& v : mesh.verts)
-			car.verts.push_back({ v[0] + nodes[number].pos[0], v[1] + nodes[number].pos[1], v[2] + nodes[number].pos[2] });
+			car.verts.push_back({ Round((v[0] + nodes[number].pos[0]) * WSPCDLC_CAR_SCALE), Round((v[1] + nodes[number].pos[1]) * WSPCDLC_CAR_SCALE), Round((v[2] + nodes[number].pos[2]) * WSPCDLC_CAR_SCALE) });
 
 		for (const Prim& prim : mesh.prims)
 		{
@@ -450,6 +462,29 @@ bool Wspc_ConvertCar(const char* dobPath, const char* outFolder, std::string& lo
 	{
 		Log(log, "ERROR: %s has %d vertices, polygons address at most %d", dobPath, (int)car.verts.size(), MAX_VERTS);
 		return false;
+	}
+
+	// the model is centred on its bounding box like the Redriver cars (wheel positions follow in CAR.INFO)
+	int lo[3] = { car.verts[0].x, car.verts[0].y, car.verts[0].z }, hi[3] = { lo[0], lo[1], lo[2] };
+	for (const Vec& v : car.verts)
+	{
+		int c[3] = { v.x, v.y, v.z };
+		for (int k = 0; k < 3; k++)
+		{
+			lo[k] = std::min(lo[k], c[k]);
+			hi[k] = std::max(hi[k], c[k]);
+		}
+	}
+
+	int centre[3];
+	for (int k = 0; k < 3; k++)
+		centre[k] = (int)floor((lo[k] + hi[k]) / 2.0);
+
+	for (Vec& v : car.verts)
+	{
+		v.x -= centre[0];
+		v.y -= centre[1];
+		v.z -= centre[2];
 	}
 
 	// texture pages and palettes: every used (page, palette) pair becomes texture id n of output page 0 / 1
@@ -530,7 +565,6 @@ bool Wspc_ConvertCar(const char* dobPath, const char* outFolder, std::string& lo
 		textureOf[poly.material] = lookup[{ mat.page, mat.clut }];
 	}
 
-	std::vector<char> model = BuildModel(car, textureOf);
 
 	std::vector<Wheel> wheelInfo;
 	for (int number : wheels)
@@ -540,17 +574,18 @@ bool Wspc_ConvertCar(const char* dobPath, const char* outFolder, std::string& lo
 		if (!ReadMesh(d, pool, nodes[number].poolOffset, mesh) || mesh.verts.empty())
 			continue;
 
-		int lo[3] = { 1 << 30, 1 << 30, 1 << 30 }, hi[3] = { -(1 << 30), -(1 << 30), -(1 << 30) };
+		double wlo[3] = { 1e30, 1e30, 1e30 }, whi[3] = { -1e30, -1e30, -1e30 };
 		for (auto& v : mesh.verts)
 		{
 			for (int k = 0; k < 3; k++)
 			{
-				lo[k] = std::min(lo[k], v[k] + nodes[number].pos[k]);
-				hi[k] = std::max(hi[k], v[k] + nodes[number].pos[k]);
+				double scaled = (v[k] + nodes[number].pos[k]) * WSPCDLC_CAR_SCALE;
+				wlo[k] = std::min(wlo[k], scaled);
+				whi[k] = std::max(whi[k], scaled);
 			}
 		}
 
-		wheelInfo.push_back({ (lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2, (hi[1] - lo[1]) / 2 });
+		wheelInfo.push_back({ Round((wlo[0] + whi[0]) / 2) - centre[0], Round((wlo[1] + whi[1]) / 2) - centre[1], Round((wlo[2] + whi[2]) / 2) - centre[2], Round((whi[1] - wlo[1]) / 2) });
 	}
 
 	std::string info;
@@ -566,8 +601,12 @@ bool Wspc_ConvertCar(const char* dobPath, const char* outFolder, std::string& lo
 	MakeFolder(outFolder);
 	std::string folder = std::string(outFolder) + "\\";
 	bool ok = true;
-	for (const char* name : { "CLEAN.MDL", "DAMAGED.MDL", "LOW.MDL" })
-		ok = ok && WriteFile(folder + name, model.data(), model.size());
+	const char* modelNames[3] = { "CLEAN.MDL", "DAMAGED.MDL", "LOW.MDL" };
+	for (int kind = 0; kind < 3; kind++)
+	{
+		std::vector<char> model = BuildModel(car, textureOf, (ModelKind)kind);
+		ok = ok && WriteFile(folder + modelNames[kind], model.data(), model.size());
+	}
 
 	ok = ok && WriteFile(folder + "TEXTURE.BIN", texture.data(), texture.size());
 	ok = ok && WriteFile(folder + "CAR.INFO", info.data(), info.size());

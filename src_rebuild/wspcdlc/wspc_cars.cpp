@@ -19,3 +19,15 @@ const WspcCar g_WspcCars[WSPCDLC_NUM_CARS] = {
 	{ "LIMO_W",		"Limousine",		WSPC_LIMO },
 	{ "PIZZACAR",	"Pizza Car",		WSPC_COMPACT },
 };
+
+const char* WspcDlc_CarTitle(int car)
+{
+	return g_WspcCars[car].title;
+}
+
+// Driver 2 car model (0 = cop car, 1..4 = the traffic cars of the city) whose handling, wheels and lights a WSPC car borrows.
+// First rule: cops drive like the cop car, everything else like the first traffic car; refine per behaviour after driving them.
+int WspcDlc_DonorModel(int car)
+{
+	return g_WspcCars[car].behaviour == WSPC_COP ? 0 : 1;
+}

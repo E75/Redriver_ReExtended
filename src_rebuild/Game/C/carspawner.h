@@ -13,6 +13,7 @@ void CarSpawnerStart(void);			// from the menu: the showroom starts at the next 
 void CarSpawnerCommandLine(int index, int auto_mode);	// -carspawner <index> [autoright|autostart]: tests
 int CarSpawnerBlocksExit(void);	// 1 while the player may not get out of the car
 int CarSpawnerUpdate(int pressed);	// every game step from CheckForPause; returns 1 when the pad press was used
+int LoadD2SlotCosmetics(int model);	// cosmetics of Driver 2 car 'model' of the loaded city into the special slot (also used by wspccar.c)
 
 #endif // !PSX
 

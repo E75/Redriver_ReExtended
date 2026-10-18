@@ -4,11 +4,13 @@ Output folder per car: CLEAN.MDL, DAMAGED.MDL, LOW.MDL, TEXTURE.BIN, CAR.INFO. F
 TEXTURE.BIN: u32 pages, per page u32 palettes, palettes * 32 bytes (15 bit colours), 0x8000 bytes of 4 bit pixels.
 """
 import argparse
+import math
 import struct
 from pathlib import Path
 
 import dob2glb as dob
 
+CAR_SCALE = 0.55                # source units to Redriver units: a Redriver car is about 750 units long (half length 375)
 MODEL_HEADER = 36
 POLY_FT3, POLY_FT4 = 20, 21     # Redriver polygon ids, 20 bytes each
 MAX_VERTS = 256                 # polygon vertex numbers are one byte
@@ -45,6 +47,10 @@ def bgr555(rgba: bytes) -> int:
     return (r >> 3) | (g >> 3) << 5 | (b >> 3) << 10 or 0x8000
 
 
+def rnd(value: float) -> int:
+    return math.floor(value + 0.5)
+
+
 def sub(a: tuple[float, float, float], b: tuple[float, float, float]) -> tuple[float, float, float]:
     return a[0] - b[0], a[1] - b[1], a[2] - b[2]
 
@@ -56,7 +62,7 @@ def cross(a: tuple[float, float, float], b: tuple[float, float, float]) -> tuple
 def unit(v: tuple[float, float, float]) -> tuple[int, int, int]:
     """Direction as 4096 = 1.0."""
     length = (v[0] ** 2 + v[1] ** 2 + v[2] ** 2) ** 0.5 or 1.0
-    return tuple(round(4096 * c / length) for c in v)
+    return tuple(rnd(4096 * c / length) for c in v)
 
 
 def collect(data: bytes, pool: int, nodes: list[dob.Node], wanted: tuple[int, ...], scale: float):
@@ -71,7 +77,7 @@ def collect(data: bytes, pool: int, nodes: list[dob.Node], wanted: tuple[int, ..
         material_base = len(materials)
         materials.extend(node_materials)
         px, py, pz = node.position
-        verts.extend((round((x + px) * scale), round((y + py) * scale), round((z + pz) * scale)) for x, y, z in node_verts)
+        verts.extend((rnd((x + px) * scale), rnd((y + py) * scale), rnd((z + pz) * scale)) for x, y, z in node_verts)
         for prim in prims:
             if prim.material < len(node_materials) and all(i < len(node_verts) for i in prim.indices):
                 colour = tuple(sum(c[k] for c in prim.colours) // len(prim.colours) for k in range(3))
@@ -82,8 +88,8 @@ def collect(data: bytes, pool: int, nodes: list[dob.Node], wanted: tuple[int, ..
     return [verts[i] for i in used], polys, materials
 
 
-def build_model(verts, polys, texture_of) -> bytes:
-    """MODEL file: header, vertices, point normals, polygons (FT3 / FT4), face normals."""
+def build_model(verts, polys, texture_of, kind: str) -> bytes:
+    """MODEL file of kind CLEAN (header, vertices, point normals, polygons FT3 / FT4, face normals), DAMAGED (vertices) or LOW (vertices, polygons)."""
     count = len(verts)
     poly_bytes = bytearray()
     face_normals = bytearray()
@@ -104,14 +110,21 @@ def build_model(verts, polys, texture_of) -> bytes:
         face_normals += struct.pack('<4h', *unit(normal), 0)
         for i in indices:
             point_sum[i] = tuple(p + n for p, n in zip(point_sum[i], normal))
+    # The engine copies the part before the polygons into the special slot (the polygons stay in the file buffer), so the damaged
+    # and the low detail model carry only what they need: vertices, and the polygons of the low detail one.
     vertex_at = MODEL_HEADER
-    point_at = vertex_at + 8 * count
-    poly_at = point_at + 8 * count
+    point_at = vertex_at + 8 * count if kind == 'CLEAN' else vertex_at
+    poly_at = vertex_at + 8 * count + (8 * count if kind == 'CLEAN' else 0)
+    if kind == 'DAMAGED':
+        poly_bytes, polys = bytearray(), []
+    if kind != 'CLEAN':
+        face_normals = bytearray()
     normals_at = poly_at + len(poly_bytes)
     radius = int(max((x * x + y * y + z * z) ** 0.5 for x, y, z in verts))
     header = struct.pack('<HHhBBhHHHiiiii', 0, 0, -1, 0, 0, radius, count, count, len(polys), vertex_at, poly_at, normals_at, point_at, 0)
     body = b''.join(struct.pack('<4h', x, y, z, 0) for x, y, z in verts)
-    body += b''.join(struct.pack('<4h', *unit(n), 0) for n in point_sum)
+    if kind == 'CLEAN':
+        body += b''.join(struct.pack('<4h', *unit(n), 0) for n in point_sum)
     return header + body + bytes(poly_bytes) + bytes(face_normals)
 
 
@@ -149,6 +162,9 @@ def convert(source: Path, out: Path, body: tuple[int, ...] | None, wheels: tuple
     verts, polys, materials = collect(data, pool, nodes, body, scale)
     if len(verts) > MAX_VERTS:
         raise SystemExit(f'{len(verts)} vertices, polygons address at most {MAX_VERTS}')
+    # the model is centred on its bounding box like the Redriver cars (wheel positions follow in CAR.INFO)
+    centre = [(min(v[k] for v in verts) + max(v[k] for v in verts)) // 2 for k in range(3)]
+    verts = [tuple(v[k] - centre[k] for k in range(3)) for v in verts]
     used = sorted({(materials[m].page, materials[m].clut) for _, m, _ in polys})
     lookup, blob = build_textures(data, by_tag, used)
 
@@ -157,17 +173,16 @@ def convert(source: Path, out: Path, body: tuple[int, ...] | None, wheels: tuple
         page, palette = lookup[(m.page, m.clut)]
         return page, palette, m.uv
 
-    model = build_model(verts, polys, texture_of)
     out.mkdir(parents=True, exist_ok=True)
     for name in ('CLEAN', 'DAMAGED', 'LOW'):
-        (out / f'{name}.MDL').write_bytes(model)
+        (out / f'{name}.MDL').write_bytes(build_model(verts, polys, texture_of, name))
     (out / 'TEXTURE.BIN').write_bytes(blob)
     wheel_centres = []
     for number in wheels:
         node_verts, _, _ = dob.read_mesh(data, pool, nodes[number].pool_offset)
         px, py, pz = nodes[number].position
         xs, ys, zs = ([(v[k] + p) * scale for v in node_verts] for k, p in enumerate((px, py, pz)))
-        wheel_centres.append((round((min(xs) + max(xs)) / 2), round((min(ys) + max(ys)) / 2), round((min(zs) + max(zs)) / 2), round((max(ys) - min(ys)) / 2)))
+        wheel_centres.append((rnd((min(xs) + max(xs)) / 2) - centre[0], rnd((min(ys) + max(ys)) / 2) - centre[1], rnd((min(zs) + max(zs)) / 2) - centre[2], rnd((max(ys) - min(ys)) / 2)))
     lines = [f'vertices={len(verts)}', f'polys={len(polys)}', f'pages={len({p for p, _ in used})}', f'palettes={len(used)}',
              f'bounds={[min(v[k] for v in verts) for k in range(3)]}..{[max(v[k] for v in verts) for k in range(3)]}']
     lines += [f'wheel{i}=x{w[0]} y{w[1]} z{w[2]} radius{w[3]}' for i, w in enumerate(wheel_centres)]
@@ -185,7 +200,7 @@ def main() -> None:
     parser.add_argument('out', type=Path)
     parser.add_argument('--body', type=numbers, help='body node numbers (default: guessed from the node shapes)')
     parser.add_argument('--wheels', type=numbers, help='wheel node numbers, only measured (default: guessed)')
-    parser.add_argument('--scale', type=float, default=1.0, help='source units to Redriver units')
+    parser.add_argument('--scale', type=float, default=CAR_SCALE, help='source units to Redriver units')
     args = parser.parse_args()
     convert(args.dob, args.out, args.body, args.wheels, args.scale)
 
