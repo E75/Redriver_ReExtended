@@ -168,6 +168,14 @@ extern int D1Dlc_PlayerCars(int gameLevel);
 extern bool D1Dlc_ConvertCity(int dlcIndex, const char* dataRoot, char* outPath, int outPathSize);
 extern const char* D1Dlc_LastLog();
 
+// WSPC DLC library (src_rebuild/wspcdlc/wspcdlc.h)
+extern int gWspcDlcEnabled;
+extern int gWspcDlcChecked;
+extern int gWspcDlcPrepared;
+extern int gWspcDlcCarMask;
+extern int WspcDlc_CheckData();
+extern void WspcDlc_SaveConfig();
+
 // Driver 1 missions (src_rebuild/d1dlc/d1_missions.h)
 extern bool D1Missions_Available();
 extern int D1Missions_CityCount(int gameLevel);

@@ -322,7 +322,7 @@ enum FEButtonAction
 #ifdef USE_EMBEDDED_FRONTEND_SCREENS
 #include "FEscreens.inc"
 #else
-PSXSCREEN PsxScreens[55];	// 0-39 SCRS.BIN, 40 mini cars, 41 Driver 1 cities, 42 camera orbit, 43 extended settings, 44 draw distance, 45 crowd, 46 camera distance, 47 all cities cars, 48 sky, 49 Driver 1 mission cities, 50 Driver 1 missions, 51 day night cycle, 52 volumetric effects, 53 Driver 1 DLC (40-53 are built in code)
+PSXSCREEN PsxScreens[56];	// 55 WSPC DLC, 0-39 SCRS.BIN, 40 mini cars, 41 Driver 1 cities, 42 camera orbit, 43 extended settings, 44 draw distance, 45 crowd, 46 camera distance, 47 all cities cars, 48 sky, 49 Driver 1 mission cities, 50 Driver 1 missions, 51 day night cycle, 52 volumetric effects, 53 Driver 1 DLC (40-53 are built in code)
 #endif
 
 #define FE_OTSIZE 16
@@ -396,6 +396,7 @@ int SkyScreen(int bSetup);
 int DayCycleScreen(int bSetup);
 int VolumetricEffectsScreen(int bSetup);
 int Driver1DlcScreen(int bSetup);
+int WspcDlcScreen(int bSetup);
 int StoryScreen(int bSetup);
 int Driver1MissionCityScreen(int bSetup);
 int Driver1MissionListScreen(int bSetup);
@@ -427,6 +428,8 @@ extern int gDayCycle;						// daycycle.c
 #define FEVAR_D1DLC				25
 #define DENTS_SCREEN			54		// built in code: impact dents and lost wheels Off / On (Extended Settings)
 #define FEVAR_DENTS				26
+#define WSPCDLC_SCREEN			55		// built in code: WSPC DLC Off / On / Check DLC Folder (Extended Settings)
+#define FEVAR_WSPCDLC			27
 extern int gImpactDents;					// denting.c
 extern int gSunShafts;					// sky.c
 extern int gVolumeLights;				// draw.c
@@ -472,7 +475,8 @@ screenFunc fpUserFunctions[] = {
 	DayCycleScreen,
 	VolumetricEffectsScreen,
 	Driver1DlcScreen,
-	ImpactDentsScreen
+	ImpactDentsScreen,
+	WspcDlcScreen
 };
 
 char* gfxNames[4] = {
@@ -932,6 +936,18 @@ void SetVariable(int var)
 
 			gD1DlcEnabled = gD1DlcEnabled && gD1DlcCityMask != 0;
 			D1Dlc_SaveConfig();
+			break;
+		case FEVAR_WSPCDLC:
+			if (value == 2)
+			{
+				ShowSavingWaitMessage("Converting the WSPC cars, please wait", 0);
+				WspcDlc_CheckData();
+				gWspcDlcEnabled = gWspcDlcCarMask != 0;		// a successful check switches the cars on
+			}
+			else
+				gWspcDlcEnabled = value && gWspcDlcCarMask != 0;	// On needs converted cars
+
+			WspcDlc_SaveConfig();
 			break;
 		case FEVAR_DENTS:
 			gImpactDents = value;
@@ -1506,6 +1522,9 @@ void LoadFrontendScreens(int full)
 
 		PsxScreens[DENTS_SCREEN] = PsxScreens[31];
 		PsxScreens[DENTS_SCREEN].userFunctionNum = 39;		// ImpactDentsScreen
+
+		PsxScreens[WSPCDLC_SCREEN] = PsxScreens[31];
+		PsxScreens[WSPCDLC_SCREEN].userFunctionNum = 40;	// WspcDlcScreen
 #endif // PSX
 
 #if ENABLE_BONUS_CONTENT
@@ -3990,7 +4009,7 @@ int ExtendedOptionsScreen(int bSetup)
 {
 	if (bSetup)
 	{
-		BuildButtonsVertical(CAMERA_DISTANCE_MENU ? 9 : 8, 160, 170);
+		BuildButtonsVertical(CAMERA_DISTANCE_MENU ? 10 : 9, 160, 170);
 
 		pCurrScreen->buttons[0].action = FE_MAKEVAR(BTN_NEXT_SCREEN, DRAW_DISTANCE_SCREEN);
 		pCurrScreen->buttons[0].var = -1;
@@ -4028,6 +4047,10 @@ int ExtendedOptionsScreen(int bSetup)
 		pCurrScreen->buttons[next].action = FE_MAKEVAR(BTN_NEXT_SCREEN, D1DLC_SCREEN);
 		pCurrScreen->buttons[next].var = -1;
 		strcpy(pCurrScreen->buttons[next++].Name, "Driver 1 DLC");
+
+		pCurrScreen->buttons[next].action = FE_MAKEVAR(BTN_NEXT_SCREEN, WSPCDLC_SCREEN);
+		pCurrScreen->buttons[next].var = -1;
+		strcpy(pCurrScreen->buttons[next++].Name, "WSPC DLC");
 
 		pCurrScreen->buttons[next].action = FE_MAKEVAR(BTN_NEXT_SCREEN, DENTS_SCREEN);
 		pCurrScreen->buttons[next].var = -1;
@@ -4172,6 +4195,41 @@ int Driver1DlcScreen(int bSetup)
 			strcpy(checkName, "Not Found - Check Again");
 
 		BuildOptionButtons(3, gD1DlcCityMask ? names : namesNoData, FEVAR_D1DLC, gD1DlcEnabled);
+
+		// checking, switching on and off all happen on this one page: it only builds itself again
+		for (int i = 0; i < 3; i++)
+			pCurrScreen->buttons[i].action = FE_MAKEVAR(BTN_RELOAD_SCREEN, 0);
+
+		return 1;
+	}
+
+	return 0;
+}
+
+int WspcDlcScreen(int bSetup)
+{
+	if (bSetup)
+	{
+		static char checkName[40];
+		static char* names[3] = { "Off", "On", checkName };
+		static char* namesNoCars[3] = { "Off", "On (Check DLC Folder First)", checkName };
+
+		if (!gWspcDlcChecked)
+			strcpy(checkName, "Check DLC Folder");
+		else if (gWspcDlcCarMask && !gWspcDlcPrepared)
+			strcpy(checkName, "Update Needed - Convert DLC");
+		else if (gWspcDlcCarMask)
+		{
+			int found = 0;
+			for (int m = gWspcDlcCarMask; m; m >>= 1)
+				found += m & 1;
+
+			sprintf(checkName, "Found %d Cars - Convert DLC", found);
+		}
+		else
+			strcpy(checkName, "Not Found - Check DLC Folder");
+
+		BuildOptionButtons(3, gWspcDlcCarMask ? names : namesNoCars, FEVAR_WSPCDLC, gWspcDlcEnabled);
 
 		// checking, switching on and off all happen on this one page: it only builds itself again
 		for (int i = 0; i < 3; i++)

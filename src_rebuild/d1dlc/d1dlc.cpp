@@ -215,40 +215,9 @@ void D1Dlc_SetConfig(const char* configPath, int checked, int mask, int enabled,
 // Replaces the [d1dlc] section of the config file, everything else stays as it is (line endings included).
 void D1Dlc_SaveConfig()
 {
-	std::string text;
-	FILE* fp = fopen(g_configPath.c_str(), "rb");
-	if (fp)
-	{
-		char buf[4096];
-		size_t n;
-		while ((n = fread(buf, 1, sizeof(buf), fp)) > 0)
-			text.append(buf, n);
-
-		fclose(fp);
-	}
-
-	const char* eol = text.find("\r\n") != std::string::npos ? "\r\n" : "\n";
-
-	size_t start = text.find("[d1dlc]");
-	if (start != std::string::npos)
-	{
-		size_t end = text.find("\n[", start + 1);
-		text.erase(start, end == std::string::npos ? std::string::npos : end + 1 - start);
-	}
-
-	while (!text.empty() && (text.back() == '\n' || text.back() == '\r'))
-		text.pop_back();
-
-	char section[200];
-	snprintf(section, sizeof(section), "%s%s[d1dlc]%schecked=%d%smask=%d%senabled=%d%sprepared=%d%s", text.empty() ? "" : eol, text.empty() ? "" : eol, eol, gD1DlcChecked, eol, gD1DlcCityMask, eol, gD1DlcEnabled, eol, gD1DlcPrepared, eol);
-	text += section;
-
-	fp = fopen(g_configPath.c_str(), "wb");
-	if (fp)
-	{
-		fwrite(text.data(), 1, text.size(), fp);
-		fclose(fp);
-	}
+	char body[120];
+	snprintf(body, sizeof(body), "checked=%d\nmask=%d\nenabled=%d\nprepared=%d\n", gD1DlcChecked, gD1DlcCityMask, gD1DlcEnabled, gD1DlcPrepared);
+	WriteIniSection(g_configPath.c_str(), "d1dlc", body);
 }
 
 int D1Dlc_CheckData()

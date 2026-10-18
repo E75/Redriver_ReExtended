@@ -239,6 +239,8 @@ project "REDRIVER2"
 			"utils/**.c",
 			"d1dlc/**.h",
 			"d1dlc/**.cpp",
+			"wspcdlc/**.h",
+			"wspcdlc/**.cpp",
 			"redriver2_psxpc.cpp",
 		}
 		

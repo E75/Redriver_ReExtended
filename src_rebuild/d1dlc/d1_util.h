@@ -71,6 +71,55 @@ private:
 	bool		m_ok{ true };
 };
 
+// Replaces the section [name] of an ini file by the lines in body (each ending in \n), everything else stays as it is
+// (line endings included). The section is added at the end when it is missing.
+inline void WriteIniSection(const char* path, const char* name, const std::string& body)
+{
+	std::string text;
+	FILE* fp = fopen(path, "rb");
+	if (fp)
+	{
+		char buf[4096];
+		size_t n;
+		while ((n = fread(buf, 1, sizeof(buf), fp)) > 0)
+			text.append(buf, n);
+
+		fclose(fp);
+	}
+
+	const char* eol = text.find("\r\n") != std::string::npos ? "\r\n" : "\n";
+	std::string header = std::string("[") + name + "]";
+
+	size_t start = text.find(header);
+	if (start != std::string::npos)
+	{
+		size_t end = text.find("\n[", start + 1);
+		text.erase(start, end == std::string::npos ? std::string::npos : end + 1 - start);
+	}
+
+	while (!text.empty() && (text.back() == '\n' || text.back() == '\r'))
+		text.pop_back();
+
+	if (!text.empty())
+		text += std::string(eol) + eol;
+
+	text += header + eol;
+	for (char c : body)
+	{
+		if (c == '\n')
+			text += eol;
+		else
+			text += c;
+	}
+
+	fp = fopen(path, "wb");
+	if (fp)
+	{
+		fwrite(text.data(), 1, text.size(), fp);
+		fclose(fp);
+	}
+}
+
 inline void Put(std::vector<char>& dst, const void* src, size_t size)
 {
 	const char* p = (const char*)src;

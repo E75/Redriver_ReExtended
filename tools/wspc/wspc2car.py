@@ -38,7 +38,7 @@ def classify(data: bytes, pool: int, nodes: list[dob.Node]) -> tuple[tuple[int, 
 
 
 def bgr555(rgba: bytes) -> int:
-    """PS1 15 bit colour; all zero = transparent (0), opaque black gets the semi transparency bit."""
+    """15 bit colour; all zero = transparent (0), opaque black gets the semi transparency bit."""
     r, g, b, a = rgba
     if (r, g, b, a) == (0, 0, 0, 0):
         return 0

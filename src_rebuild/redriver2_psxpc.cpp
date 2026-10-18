@@ -23,6 +23,7 @@
 
 #include "utils/ini.h"
 #include "d1dlc/d1dlc.h"
+#include "wspcdlc/wspcdlc.h"
 #include "d1dlc/d1_missions.h"
 
 #include <SDL_scancode.h>
@@ -779,6 +780,31 @@ int main(int argc, char** argv)
 		}
 	}
 	PsyX_Log_Info("Driver 1 cities: mask 0x%x\n", gD1DlcCityMask);
+
+	// WSPC cars: looked for once from the menu and kept in config.ini [wspcdlc] (-wspccheck converts at start, for tests)
+	{
+		int wspcChecked = 0, wspcMask = 0, wspcOn = 0, wspcPrepared = 0;
+		if (config)
+		{
+			ini_sget(config, "wspcdlc", "checked", "%d", &wspcChecked);
+			ini_sget(config, "wspcdlc", "mask", "%d", &wspcMask);
+			ini_sget(config, "wspcdlc", "enabled", "%d", &wspcOn);
+			ini_sget(config, "wspcdlc", "prepared", "%d", &wspcPrepared);
+		}
+
+		WspcDlc_SetConfig(configFilename, wspcChecked, wspcMask, wspcOn, wspcPrepared);
+
+		for (int i = 1; i < argc; i++)
+		{
+			if (!strcmp(argv[i], "-wspccheck"))
+			{
+				WspcDlc_CheckData();
+				gWspcDlcEnabled = gWspcDlcCarMask != 0;
+				WspcDlc_SaveConfig();
+				PsyX_Log_Info("WSPC check: mask 0x%x\n%s", gWspcDlcCarMask, WspcDlc_LastLog());
+			}
+		}
+	}
 
 	// configure Psy-X CD image reader
 	if (cdImageFileName)
