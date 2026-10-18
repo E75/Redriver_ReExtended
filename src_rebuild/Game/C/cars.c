@@ -788,6 +788,23 @@ void restoreLightingMatrices(void)
 	gte_SetLightMatrix(&save_light_matrix);
 }
 
+#ifndef PSX
+int gCarLighting = 1;	// config.ini [render] carLighting: roofs catch the sky, flanks and the under body stay darker
+
+static SVECTOR sModelUp;	// world up in the model space of the car being lit
+
+// shades the vertex colour (low byte r, high byte g, as the car prims read it) by how far the normal points up
+static void CarSkyLight(short* pad, const SVECTOR* n)
+{
+	// the model normals point into the car: minus gives the outward normal
+	int up = -(n->vx * sModelUp.vx + n->vy * sModelUp.vy + n->vz * sModelUp.vz) >> 12;	// -4096..4096
+	int scale = 4096 + (up > 0 ? up * 22 / 100 : up * 48 / 100);
+	int r = (*pad & 0xff) * scale >> 12, g = (*pad >> 8 & 0xff) * scale >> 12;
+
+	*pad = (short)(MIN(255, r) | MIN(255, g) << 8);
+}
+#endif
+
 // [D] [T]
 void ComputeCarLightingLevels(CAR_DATA* cp, char detail)
 {
@@ -824,6 +841,16 @@ void ComputeCarLightingLevels(CAR_DATA* cp, char detail)
 	gte_ldv0(&lightsourcevector);
 	gte_rtv0();
 	gte_stsv(light_matrix.m[0]);
+
+#ifndef PSX
+	{
+		SVECTOR up = { 0, -4096, 0, 0 };
+
+		gte_ldv0(&up);
+		gte_rtv0();
+		gte_stsv(&sModelUp);
+	}
+#endif
 
 	colour_matrix.m[0][0] = colour.vx;
 	colour_matrix.m[1][0] = colour.vy;
@@ -903,6 +930,15 @@ void ComputeCarLightingLevels(CAR_DATA* cp, char detail)
 			ppads[0].pad = *(short*)&c0;
 			ppads[1].pad = *(short*)&c1;
 			ppads[2].pad = *(short*)&c2;
+
+#ifndef PSX
+			if (gCarLighting)
+			{
+				CarSkyLight(&ppads[0].pad, &norms[0]);
+				CarSkyLight(&ppads[1].pad, &norms[1]);
+				CarSkyLight(&ppads[2].pad, &norms[2]);
+			}
+#endif
 
 			count--;
 			norms += 3;
@@ -2083,6 +2119,12 @@ void DrawCar(CAR_DATA* cp, int view)
 #endif
 
 		SetShadowPoints(cp, corners);
+
+#ifndef PSX
+		if (gContactShadow)
+			PlaceContactShadow(corners, yVal < 0 ? 0 : 2);
+#endif
+
 		PlaceShadowForCar(corners, 4, 10, yVal < 0 ? 0 : 2, SunShadow(cp, corners));
 
 		ComputeCarLightingLevels(cp, 1);

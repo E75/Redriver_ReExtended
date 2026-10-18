@@ -58,6 +58,8 @@ extern int gDrawDistance;
 extern int gSkyHd;
 extern int gSunShafts;
 extern int gFlareSmooth;
+extern int gContactShadow;
+extern int gCarLighting;
 extern int gDayCycle;
 extern int gDistanceFog;
 extern int gVolumeLights;
@@ -644,6 +646,8 @@ int main(int argc, char** argv)
 		ini_sget(config, "render", "bilinearFiltering", "%d", &g_cfg_bilinearFiltering);
 		ini_sget(config, "render", "sunShafts", "%d", &gSunShafts);
 		ini_sget(config, "render", "lensFlareSmooth", "%d", &gFlareSmooth);
+		ini_sget(config, "render", "contactShadow", "%d", &gContactShadow);
+		ini_sget(config, "render", "carLighting", "%d", &gCarLighting);
 		ini_sget(config, "render", "skyHd", "%d", &gSkyHd);
 		ini_sget(config, "render", "distanceFog", "%d", &gDistanceFog);
 		ini_sget(config, "render", "volumeLights", "%d", &gVolumeLights);
@@ -677,6 +681,8 @@ int main(int argc, char** argv)
 		ini_sget(config, "game", "languageId", "%d", &gUserLanguage);
 		ini_sget(config, "game", "overrideContent", "%d", &gContentOverride);
 		ini_sget(config, "d1dlc", "missions", "%d", &gD1MissionsEnabled);
+		extern int gD1ChaseInfiniteMass;
+		ini_sget(config, "d1dlc", "chaseInfiniteMass", "%d", &gD1ChaseInfiniteMass);
 		
 	
 		gCameraDefaultScrZ = MAX(MIN(newScrZ, 384), 128);

@@ -29,6 +29,9 @@ struct TYRE_TRACK
 	SVECTOR_NOPAD p4;
 };
 
+#define CONTACT_SHADOW_SIZE		88		// percent of the footprint
+#define CONTACT_SHADOW_STRENGTH	64		// extra darkness under the car, same scale as the shadow strength (45..128)
+
 int gShadowTexturePage;
 int gShadowTextureNum;
 
@@ -560,6 +563,35 @@ int SunShadow(CAR_DATA* cp, VECTOR* corners)
 
 	return soft + (int)((strength - soft) * sun);
 }
+
+#ifndef PSX
+int gContactShadow = 1;		// config.ini [render] contactShadow: a tight dark patch right under the car, where no light gets in
+
+// footprint of the car (SetShadowPoints) shrunk towards its middle, laid on the road under the car
+void PlaceContactShadow(VECTOR* footprint, int flag)
+{
+	VECTOR corners[4];
+	int cx = 0, cz = 0, i;
+
+	for (i = 0; i < 4; i++)
+	{
+		cx += footprint[i].vx;
+		cz += footprint[i].vz;
+	}
+
+	cx /= 4;
+	cz /= 4;
+
+	for (i = 0; i < 4; i++)
+	{
+		corners[i].vx = cx + (footprint[i].vx - cx) * CONTACT_SHADOW_SIZE / 100;
+		corners[i].vz = cz + (footprint[i].vz - cz) * CONTACT_SHADOW_SIZE / 100;
+		corners[i].vy = footprint[i].vy;
+	}
+
+	PlaceShadowForCar(corners, 0, 10, flag, CONTACT_SHADOW_STRENGTH);
+}
+#endif
 
 // [D] [T] [A] better shadow code
 void PlaceShadowForCar(VECTOR *shadowPoints, int subdiv, int zOfs, int flag, int strength)
