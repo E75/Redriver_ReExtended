@@ -57,6 +57,7 @@ void CheckModifierKeys(int nKey, bool down)
 extern int gDrawDistance;
 extern int gSkyHd;
 extern int gSunShafts;
+extern int gFlareSmooth;
 extern int gDayCycle;
 extern int gDistanceFog;
 extern int gVolumeLights;
@@ -642,6 +643,7 @@ int main(int argc, char** argv)
 		ini_sget(config, "render", "pgxpZbuffer", "%d", &g_cfg_pgxpZBuffer);
 		ini_sget(config, "render", "bilinearFiltering", "%d", &g_cfg_bilinearFiltering);
 		ini_sget(config, "render", "sunShafts", "%d", &gSunShafts);
+		ini_sget(config, "render", "lensFlareSmooth", "%d", &gFlareSmooth);
 		ini_sget(config, "render", "skyHd", "%d", &gSkyHd);
 		ini_sget(config, "render", "distanceFog", "%d", &gDistanceFog);
 		ini_sget(config, "render", "volumeLights", "%d", &gVolumeLights);
