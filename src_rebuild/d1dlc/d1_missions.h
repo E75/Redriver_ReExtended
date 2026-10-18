@@ -10,7 +10,7 @@
 #include <vector>
 
 #define D1MISSION_BASE			1000	// mission numbers of converted missions: D1MISSION_BASE + D1 story mission
-#define D1MISSION_VERSION		8	// bump when the converter output changes -> forces reconversion
+#define D1MISSION_VERSION		9	// bump when the converter output changes -> forces reconversion
 #define D1MISSION_STORY_COUNT	44		// the first 44 scripts of MISSION.BLK are the story missions
 #define D1MISSION_FREE_FIRST	117		// scripts 117 (Garage) and 118 (Test Level): free drives in the Training level
 #define D1MISSION_FREE_COUNT	2
