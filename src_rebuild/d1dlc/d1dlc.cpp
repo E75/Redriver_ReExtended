@@ -16,33 +16,38 @@ const D1DlcCity g_D1DlcCities[D1DLC_NUM_CITIES] = {
 	{ D1DLC_FIRST_CITY + 3, "NEWYORK",	"NEWYORK.LEV",	-87000,  56250,   0,    5 },
 	{ D1DLC_FIRST_CITY + 4, "NEWCASTLE",	"CREDITS.LEV",	-8250, 48750, 0, 0 },
 	{ D1DLC_FIRST_CITY + 5, "TRAINING",	"TRAIN.LEV",	-6750, -37500, 0, 2 },
+	// car park of the Garage and Test Level missions (city id 2 of the mission scripts): plays in the Training slot, see gD1DlcGarage
+	{ D1DLC_FIRST_CITY + 5, "GARAGE",	"IVIEW.LEV",	0, 0, 0, 2 },
 };
+
+int gD1DlcGarage = 0;
+
+int D1Dlc_CityIndex(int gameLevel)
+{
+	int i = gameLevel - D1DLC_FIRST_CITY;
+
+	if (i == D1DLC_GARAGE - 1 && gD1DlcGarage)
+		i = D1DLC_GARAGE;
+
+	return i >= 0 && i < D1DLC_NUM_CITIES ? i : -1;
+}
 
 int D1Dlc_PlayerCars(int gameLevel)
 {
-	for (const D1DlcCity& city : g_D1DlcCities)
-	{
-		if (city.gameLevel == gameLevel)
-			return city.playerCars;
-	}
-
-	return 0;
+	const int i = D1Dlc_CityIndex(gameLevel);
+	return i >= 0 ? g_D1DlcCities[i].playerCars : 0;
 }
 
 bool D1Dlc_StartPosition(int gameLevel, int* x, int* z, int* rotation)
 {
-	for (const D1DlcCity& city : g_D1DlcCities)
-	{
-		if (city.gameLevel != gameLevel || (city.startX == 0 && city.startZ == 0))
-			continue;
+	const int i = D1Dlc_CityIndex(gameLevel);
+	if (i < 0 || (g_D1DlcCities[i].startX == 0 && g_D1DlcCities[i].startZ == 0))
+		return false;
 
-		*x = city.startX;
-		*z = city.startZ;
-		*rotation = city.startRotation;
-		return true;
-	}
-
-	return false;
+	*x = g_D1DlcCities[i].startX;
+	*z = g_D1DlcCities[i].startZ;
+	*rotation = g_D1DlcCities[i].startRotation;
+	return true;
 }
 
 int gD1DlcCityMask = 0;
@@ -146,8 +151,9 @@ bool D1Dlc_ConvertCity(int dlcIndex, const char* dataRoot, char* outPath, int ou
 
 bool D1Dlc_CityAvailable(int gameLevel)
 {
-	int i = gameLevel - D1DLC_FIRST_CITY;
-	if (i < 0 || i >= D1DLC_NUM_CITIES || !(gD1DlcCityMask & (1 << i)))
+	const int i = D1Dlc_CityIndex(gameLevel);
+	// a mask saved before the garage existed has no bit for it: look at the file itself
+	if (i < 0 || (!(gD1DlcCityMask & (1 << i)) && !(i == D1DLC_GARAGE && (D1Dlc_Detect("") & (1 << i)))))
 		return false;
 
 	if (g_cityState[i] == 0)

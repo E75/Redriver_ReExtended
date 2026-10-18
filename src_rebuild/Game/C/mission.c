@@ -568,6 +568,9 @@ void LoadMission(int missionnum)
 	doSpooling = (MissionHeader->region == 0);
 	Mission.active = 1;
 
+	// the Driver 1 Garage and Test Level missions play in the car park level instead of the Training ground
+	gD1DlcGarage = GameType == GAME_DRIVER1MISSION && IS_D1_GARAGE_MISSION(gCurrentMissionNumber);
+
 	// Driver 1 cities have no mission files: Take a Ride plays the Chicago mission in the selected city
 	if (!(GameType == GAME_TAKEADRIVE && IS_DRIVER1_CITY(GameLevel)))
 		GameLevel = MissionHeader->city;

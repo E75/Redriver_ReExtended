@@ -7,10 +7,11 @@
 
 #define D1DLC_DATA_FOLDER		"DRIVER1\\"
 #define D1DLC_CONVERTED_FOLDER	"DRIVER1\\CONVERTED\\"
-#define D1DLC_CONVERTER_VERSION	35// bump when the output format changes -> forces reconversion
+#define D1DLC_CONVERTER_VERSION	36// bump when the output format changes -> forces reconversion
 
 #define D1DLC_FIRST_CITY		4				// GameLevel of the first Driver 1 city
-#define D1DLC_NUM_CITIES		6
+#define D1DLC_NUM_CITIES		7
+#define D1DLC_GARAGE			6				// index of the car park level: it plays in the GameLevel of Training, no menu lists it
 
 struct D1DlcCity
 {
@@ -28,6 +29,12 @@ extern int gD1DlcCityMask;
 
 // Options - Gameplay - Secret - Extended Settings - Driver 1 DLC: the menus list the Driver 1 cities only when this is on (and the data is there)
 extern int gD1DlcEnabled;
+
+// 1 while the Driver 1 Garage / Test Level mission is loaded: the Training slot (GameLevel D1DLC_FIRST_CITY + 5) then uses the car park LEV
+extern int gD1DlcGarage;
+
+// Index in g_D1DlcCities of a GameLevel (the Training level gives the garage while gD1DlcGarage is set), -1 when it has none
+int D1Dlc_CityIndex(int gameLevel);
 
 // The Driver 1 data is looked for once, from the menu (Extended Settings - Driver 1 DLC - Check Data), and the answer is kept in
 // config.ini [d1dlc] checked / mask / enabled so it is not scanned again at every start. Until it was checked the mask is 0.

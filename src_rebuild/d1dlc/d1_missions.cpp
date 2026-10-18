@@ -242,9 +242,10 @@ const int kMinDamage = 4096, kMaxDamage = 40000;		// D1 fragile cars use 4096 / 
 const int kTimerActiveMin = 659;						// D1 timer values below this are "no timer"
 const char kDefaultLoseTail[] = "Lose the tail.";
 
-// Garage and Test Level missions (scripts 117 and 118 of MISSION.BLK, city id 2 = Training): start position, cops off, a long wait
-// and "Well done!". Their objectives live in code the converter does not know (SETVAR 39 / 40, chase switches), so they become
-// free drives: no target, no timer, no cops, no traffic (Training).
+// Garage and Test Level missions (scripts 117 and 118 of MISSION.BLK, city id 2 = the car park level IVIEW.LEV): start position,
+// cops off, a long wait and "Well done!". Their objectives live in code the converter does not know (SETVAR 39 / 40, chase
+// switches), so they become free drives: no target, no timer, no cops, no traffic. The car park is loaded in the Training
+// slot (header city = Training, engine: IS_D1_GARAGE_MISSION).
 const int kTrainingCityId = 2;
 const int kFreeDriveOps[] = { 1, 2, 10, 19, 22, 24, 34, 38, 40, 49, 52, 61, 67, 84 };
 const int kFreeDriveVars[] = { 39, 40, 45, 66 };
@@ -1217,7 +1218,7 @@ bool ConvertAll(const std::vector<char>& blk)
 	int skipped = 0;
 	g_missions.clear();
 
-	// the 44 story missions, then the Garage and Test Level missions (free drives in the Training level)
+	// the 44 story missions, then the Garage and Test Level missions (free drives in the car park level)
 	for (int k = 0; k < D1MISSION_STORY_COUNT + D1MISSION_FREE_COUNT; k++)
 	{
 		const int scriptIndex = k < D1MISSION_STORY_COUNT ? k : D1MISSION_FREE_FIRST + k - D1MISSION_STORY_COUNT;
