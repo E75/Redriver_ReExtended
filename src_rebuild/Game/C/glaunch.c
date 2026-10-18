@@ -143,6 +143,22 @@ void RestoreGameVars()
 	ActiveCheats = gCheatsBackup;
 }
 
+// the toggles of the debug pause menu hold for one game session only: back in the menu every city starts fresh
+void ResetDebugToggles(void)
+{
+	extern int gDisplayPosition, gDoOverlays, gPuppyDogCop, playerghost, gInfiniteMass, gSpeedBoost, gFlyingCar;
+	extern char gRightWayUp;
+
+	gDisplayPosition = 0;
+	gDoOverlays = 1;
+	gPuppyDogCop = 0;
+	playerghost = 0;
+	gInfiniteMass = 0;
+	gSpeedBoost = 0;
+	gFlyingCar = 0;
+	gRightWayUp = 0;
+}
+
 // [D] [T]
 void State_GameStart(void* param)
 {

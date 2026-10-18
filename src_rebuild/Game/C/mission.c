@@ -2343,9 +2343,11 @@ int MRProcessTarget(MR_THREAD *thread, MS_TARGET *target)
 				target->s.car.posZ = cp->hd.where.t[2];
 
 				// Driver 1 chase cars drive flat out (the recorded runs of REPLAY.BLK have the throttle down about 90% of the time):
-				// the road speed limit of the civilian AI is lifted to the highest one
-				if (IsDriver1ChaseCar(target) && cp->controlType == CONTROL_TYPE_CIV_AI && cp->ai.c.maxSpeed < WorldSpeedLimit(2))
-					cp->ai.c.maxSpeed = WorldSpeedLimit(2);
+				// the road speed limit of the civilian AI is lifted to the highest one, lowered again for the bends ahead
+				if (IsDriver1ChaseCar(target) && cp->controlType == CONTROL_TYPE_CIV_AI)
+				{
+					cp->ai.c.maxSpeed = CivCornerSpeed(cp);
+					civCornerBrake[cp->id] = 1;				}
 
 				// recorded route of the original run, then the civilian AI takes over
 				if (IsDriver1ChaseCar(target) && cp->controlType == CONTROL_TYPE_CIV_AI)

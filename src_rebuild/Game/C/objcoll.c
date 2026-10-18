@@ -991,7 +991,8 @@ void DoScenaryCollisions(void)
 		if (cp->controlType != CONTROL_TYPE_NONE)
 		{
 			// civ AI and dead cop cars perform less collision detection frames
-			if (cp->controlType == CONTROL_TYPE_CIV_AI || 
+			// the chased car of a Driver 1 mission drives fast and off the lane: it checks every frame, damaged or not
+			if ((cp->controlType == CONTROL_TYPE_CIV_AI && !(cp->inform && (*cp->inform & TARGET_FLAG_CAR_D1_CHASE))) ||
 				cp->controlType == CONTROL_TYPE_PURSUER_AI && cp->ai.p.dying > 85)
 			{
 				if (cp->totalDamage != 0 && (cp->hd.speed > 10 || (cp->id + CameraCnt & 3) == 0))

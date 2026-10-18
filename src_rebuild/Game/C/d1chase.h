@@ -18,6 +18,9 @@ extern int D1ChasePath_Step(CAR_DATA* cp);
 // normal car control; false when this car is not the chase car or there is no stream (the civilian AI drives then)
 extern int D1ChasePath_ProcessPad(CAR_DATA* cp);
 
+// chase car on the civilian AI: feelers ahead turn it away from buildings and cars and brake it for what it cannot take at speed
+extern void D1ChaseCar_Avoid(CAR_DATA* cp);
+
 // false when a hit on this car must not raise its damage total: the chased car only takes damage from the player's car
 extern int D1ChaseCar_DamageCounts(CAR_DATA* cp, CAR_DATA* other);
 

@@ -428,6 +428,7 @@ extern int gDayCycle;						// daycycle.c
 #define DENTS_SCREEN			54		// built in code: impact dents and lost wheels Off / On (Extended Settings)
 #define FEVAR_DENTS				26
 extern int gImpactDents;					// denting.c
+extern void ResetDebugToggles(void);		// glaunch.c
 extern int gSunShafts;					// sky.c
 extern int gVolumeLights;				// draw.c
 extern int gAtmosphere;					// draw.c
@@ -2037,6 +2038,8 @@ void InitFrontend(void)
 
 	bRedrawFrontend = 0;
 	gInFrontend = 1;
+
+	ResetDebugToggles();
 
 	idle_timer = VSync(-1);
 

@@ -1081,7 +1081,10 @@ void StepSim(void)
 				break;
 			case CONTROL_TYPE_CIV_AI:
 				if (!D1ChasePath_ProcessPad(cp))
+				{
 					CivControl(cp);
+					D1ChaseCar_Avoid(cp);
+				}
 				break;
 			case CONTROL_TYPE_PURSUER_AI:
 				CopControl(cp);
