@@ -2536,6 +2536,11 @@ int redriver2_main(int argc, char** argv)
 			gD1WheelPercent = atoi(argv[i + 1]);
 			i++;
 		}
+		else if (!strcmp(argv[i], "-carexport") && argc - i >= 2)
+		{
+			CarExportCommandLine(argv[i + 1]);
+			i++;
+		}
 		else if (!strcmp(argv[i], "-carspawner") && argc - i >= 2)
 		{
 			int mode = argc - i >= 3 ? (!strcmp(argv[i + 2], "autoright") ? 1 : !strcmp(argv[i + 2], "autostart") ? 2 : 0) : 0;
