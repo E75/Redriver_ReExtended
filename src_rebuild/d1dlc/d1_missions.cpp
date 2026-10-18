@@ -234,6 +234,7 @@ const int kPointMinTimer = 0x8000000;		// only counts once the countdown is down
 const int kSpeedUnitPercent = 100;			// D1 speed units -> D2 FIXEDH(wheel_speed), calibration knob
 const int kTimerCountPerSecond = 3000;
 const int kTimerUnitsPerSecond = 16384;
+const int kTimerBonusSeconds = 20;		// every countdown gets this much extra: the conversion costs the player time (user, 2026-10-18)
 const int kFramesPerSecond = 30;
 const int kHeatBase = 659, kHeatStep = 430, kMaxHeatLevel = 8;
 const int kMaxCopsD1 = 3;
@@ -273,7 +274,7 @@ const int kNoGettingFarMessage = 255;
 const double kPi = 3.14159265358979323846;
 
 // records the D2 mission logic has no counterpart for (cosmetic, HUD, unused tuning, hand-over to the next story mission)
-const int kIgnoredOps[] = { 10, 11, 24, 28, 30, 31, 48, 51, 64, 67, 68, 88, 92, 104 };
+const int kIgnoredOps[] = { 10, 11, 20, 24, 28, 30, 31, 48, 51, 64, 67, 68, 88, 92, 104 };		// 20 = SpawnCops (cop ambush spots, D2 cops spawn from the felony)
 const int kIgnoredVars[] = { 8, 9, 14, 15, 16, 28, 45, 47, 48, 49, 50, 52, 59, 60, 61, 69, 70 };
 // passenger scene: pedestrians walk to or from the car, short camera. Skipped by design.
 const int kSceneOps[] = { 74, 77, 78, 80, 82, 83, 112 };
@@ -422,7 +423,7 @@ bool Converter::ApplyArrivalRulesToPointTarget(Target& target)
 			return Fail("EARLY_CHECK without text");
 
 		target.ints[1] |= kPointMinTimer;
-		target.ints[13] = (int)((long long)m_earlyLimit * kTimerCountPerSecond / kTimerUnitsPerSecond);
+		target.ints[13] = (int)((long long)m_earlyLimit * kTimerCountPerSecond / kTimerUnitsPerSecond) + kTimerBonusSeconds * kTimerCountPerSecond;		// same window as D1 with the bonus time
 		target.ints[14] = m_strings.Add(m_earlyText);
 		m_notes.insert("arrival only when the timer is low enough (engine flag)");
 	}
@@ -614,7 +615,7 @@ bool Converter::ApplyScriptVariable(const Record& r)
 bool Converter::ApplyTimerRecord(const Record& r)
 {
 	bool countingUp = r.op == OP_TIMER_UP;
-	int seconds = countingUp ? 0 : r.args[0] / kTimerUnitsPerSecond;
+	int seconds = countingUp ? 0 : r.args[0] / kTimerUnitsPerSecond + (r.args[0] > 0 ? kTimerBonusSeconds : 0);
 
 	if (seconds < 0 || seconds > 0x7FFF)
 		return Fail("timer of %d seconds", seconds);

@@ -650,6 +650,11 @@ ushort GetEngineRevs(CAR_DATA* cp)
 	acc = cp->thrust;
 	type = (cp->controlType == CONTROL_TYPE_CIV_AI);
 
+	// the D2 gear table is the D1 one with the wheel speeds times 2 / 3 (and the ratios times 3 / 2): a D1 city has D1 sized
+	// wheel speeds, so they are scaled down to shift (and cut the throttle) at the D1 speeds
+	if (D1HandlingActive())
+		ws = ws * 2 / 3;
+
 	if (ws > 0)
 	{
 		ws >>= 11;

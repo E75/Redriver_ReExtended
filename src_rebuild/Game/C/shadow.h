@@ -22,6 +22,8 @@ extern void SubdivShadow(int z0, int z1, int z2, int z3, POLY_FT4 *sps); // 0x00
 extern void PlaceShadowForCar(VECTOR *shadowPoints, int subdiv, int zOfs, int flag, int strength); // 0x000766CC
 extern int SunShadow(CAR_DATA* cp, VECTOR* corners);
 extern float SunShine(void);
+extern int gContactShadow;
+extern void PlaceContactShadow(VECTOR* footprint, int flag);
 extern int gSunShadows;
 
 extern void sQuad(SVECTOR *v0, SVECTOR *v1, SVECTOR *v2, SVECTOR *v3, CVECTOR* light_col, int LightSortCorrect); // 0x00077138

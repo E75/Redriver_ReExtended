@@ -29,6 +29,7 @@
 #include "loadsave.h"
 #include "shadow.h"
 #include "handling.h"
+#include "d1chase.h"
 #include "cutrecorder.h"
 #include "felony.h"
 
@@ -2343,6 +2344,10 @@ int MRProcessTarget(MR_THREAD *thread, MS_TARGET *target)
 				if (IsDriver1ChaseCar(target) && cp->controlType == CONTROL_TYPE_CIV_AI && cp->ai.c.maxSpeed < WorldSpeedLimit(2))
 					cp->ai.c.maxSpeed = WorldSpeedLimit(2);
 
+				// recorded route of the original run, then the civilian AI takes over
+				if (IsDriver1ChaseCar(target) && cp->controlType == CONTROL_TYPE_CIV_AI)
+					D1ChasePath_Step(cp);
+
 				// make Caine's Compound vans moving
 				if (target->s.car.type == 1)
 				{
@@ -2823,7 +2828,13 @@ int MRCreateCar(MS_TARGET *target)
 	else if (IsDriver1ChaseCar(target))
 	{
 		// Driver 1 chase car: a driving civilian AI car on the nearest lane, the lead car AI does not fit the Driver 1 roads
-		curslot = CreateDrivingCivCarNear(pos[0], pos[2], target->s.car.rotation, target->s.car.model, target->s.car.palette);
+		int startX = pos[0], startZ = pos[2], startDir = target->s.car.rotation;
+
+		// with a recorded route (d1chase.c) the car starts where the original run starts
+		if (D1ChasePath_Load(gCurrentMissionNumber))
+			D1ChasePath_Start(&startX, &startZ, &startDir);
+
+		curslot = CreateDrivingCivCarNear(startX, startZ, startDir, target->s.car.model, target->s.car.palette);
 	}
 	else
 	{
@@ -2870,7 +2881,10 @@ int MRCreateCar(MS_TARGET *target)
 	target->s.car.slot = curslot;
 
 	target->s.target_flags |= TARGET_FLAG_CAR_PINGED_IN;
-	
+
+	if (IsDriver1ChaseCar(target))
+		target->s.target_flags |= TARGET_FLAG_CAR_D1_CHASE;
+
 	car_data[curslot].inform = &target->s.target_flags;
 
 	// make fully damaged (Car bomb escape)

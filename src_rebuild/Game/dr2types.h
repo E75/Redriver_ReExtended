@@ -701,6 +701,7 @@ enum TargetFlags
 	TARGET_FLAG_CAR_PLAYERCONTROLLED		= 0x20,
 	TARGET_FLAG_CAR_SWAPPED					= 0x40,
 	TARGET_FLAG_CAR_PINGED_IN				= 0x40000000,
+	TARGET_FLAG_CAR_D1_CHASE				= 0x10000000,	// Driver 1 mission chase car (set in mission.c), has infinite mass in handling.c
 
 	// event target properties
 	TARGET_FLAG_EVENT_TRIGGERED = 0x1000,

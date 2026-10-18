@@ -19,9 +19,20 @@
 
 #define GRAVITY_FORCE		(-7456)			// D1 has -10922
 
-// A Driver 1 city is MAP_CELL_SIZE / 2048 (3000 / 2048) times bigger than a Driver 2 city and so is every force of the D1 EXE
-// (gravity -10922, throttle 7200, slip clamp 18000, collision friction 1440 / 8640). Driver 2 cities (cell 2048) stay as they are.
-#define WORLD_FORCE(v)		((int)((long long)(v) * MAP_CELL_SIZE / 2048))
+// A Driver 1 city is 3000 / 2048 (the D1 cell size against the D2 one) times bigger than a Driver 2 city and so is every force
+// of the D1 EXE (gravity -10922, throttle 7200, slip clamp 18000, collision friction 1440 / 8640). The converted D1 levels use
+// 2048 unit cells too, so the scale follows the city, not MAP_CELL_SIZE. Driver 2 cities and d1Handling=0 stay as they are.
+#define D1_CELL_SIZE		3000
+#define WORLD_FORCE(v)		((int)((long long)(v) * (D1HandlingActive() ? D1_CELL_SIZE : 2048) / 2048))
+
+int gD1Handling = 1;	// config.ini [d1dlc] d1Handling: Driver 1 cities use the forces and limits of the D1 EXE (docs/dev-notes/d1-car-physics.md)
+
+// The D2 code is the D1 code with every speed, length and force divided by 1.4648: in a D1 city WORLD_FORCE undoes that for
+// the forces and the limits that compare speeds or depths take their D1 value.
+int D1HandlingActive(void)
+{
+	return gD1Handling && IS_DRIVER1_CITY(GameLevel);
+}
 
 struct CAR_LOCALS
 {
@@ -65,9 +76,11 @@ void GetFrictionScalesDriver1(CAR_DATA* cp, CAR_LOCALS* cl, int* frontFS, int* r
 {
 	int autoBrake;
 	int q;
+	int lockSpeed;
 	_HANDLING_TYPE* hp;
 
 	hp = &handlingType[cp->hndType];
+	lockSpeed = D1HandlingActive() ? 61440 : 41943;
 
 	if (cp->thrust < 0)
 		*frontFS = 1453;
@@ -93,7 +106,7 @@ void GetFrictionScalesDriver1(CAR_DATA* cp, CAR_LOCALS* cl, int* frontFS, int* r
 		D_CHECK_ERROR(hp->autoBrakeOn == 2, "invalid autoBrakeOn");
 	}
 
-	if ((cp->thrust < 0 && cp->hd.wheel_speed > 41943 && cp->hndType == 0) ||
+	if ((cp->thrust < 0 && cp->hd.wheel_speed > lockSpeed && cp->hndType == 0) ||
 		(cp->controlType == CONTROL_TYPE_CIV_AI && cp->ai.c.thrustState == CIV_AI_THRUST_STOP && cp->ai.c.ctrlState != CIV_AI_CTRL_DIED_WITH_MUSIC))
 	{
 		cp->hd.wheel[3].locked = 1;
@@ -138,10 +151,10 @@ void GetFrictionScalesDriver1(CAR_DATA* cp, CAR_LOCALS* cl, int* frontFS, int* r
 
 	if (cp->wheelspin != 0)
 	{
-		cp->thrust = FIXEDH(cp->ap.carCos->powerRatio * 5000);
+		cp->thrust = FIXEDH(cp->ap.carCos->powerRatio * (D1HandlingActive() ? 4778 : 5000));	// D1: 7000 after WORLD_FORCE
 	}
 
-	if (cp->thrust < 0 && cp->hd.wheel_speed > 41943 && cl->aggressive != 0)
+	if (cp->thrust < 0 && cp->hd.wheel_speed > lockSpeed && cl->aggressive != 0)
 	{
 		*frontFS = (*frontFS * 10) / 8;
 		*rearFS = (*rearFS * 10) / 8;
@@ -182,6 +195,14 @@ void ConvertTorqueToAngularAcceleration(CAR_DATA* cp, CAR_LOCALS* cl)
 	twistY = car_cosmetics[cp->ap.model].twistRateY;
 	twistZ = car_cosmetics[cp->ap.model].twistRateZ;
 
+	// the twist rates were set for the unscaled forces (D1 cars: D1 110 / 550 x 1.4648^2 for D2 sized levers and forces),
+	// so with WORLD_FORCE scaling the forces the turn rate per force drops by the same factor and rotation stays as before
+	if (D1HandlingActive())
+	{
+		twistY = twistY * 2048 / D1_CELL_SIZE;
+		twistZ = twistZ * 2048 / D1_CELL_SIZE;
+	}
+
 	zd = (twistZ - twistY) * FIXEDH(cp->hd.where.m[0][2] * cp->hd.aacc[0] + cp->hd.where.m[1][2] * cp->hd.aacc[1] + cp->hd.where.m[2][2] * cp->hd.aacc[2]);
 
 	for (i = 0; i < 3; i++)
@@ -220,8 +241,15 @@ void AddWheelForcesDriver1(CAR_DATA* cp, CAR_LOCALS* cl)
 	int player_id;
 	int oldCutRoughness;
 	int thrust, slipMax;
+	int d1, slideMax, susMax;
 
-	oldSpeed = cp->hd.speed * 3 >> 1;
+	// D1 limits in a D1 city: the grip curve takes the speed as it is (D2 scales it to D1 size with 3 / 2), slide clamp,
+	// depth offset and travel of the wheels are the D1 ones (D2 has them divided by 1.4648)
+	d1 = D1HandlingActive();
+	slideMax = d1 ? 72000 : 50000;
+	susMax = d1 ? 60 : 42;
+
+	oldSpeed = d1 ? cp->hd.speed : cp->hd.speed * 3 >> 1;
 
 	if (oldSpeed < 32)
 		oldSpeed = oldSpeed * -72 + 3696;
@@ -242,7 +270,7 @@ void AddWheelForcesDriver1(CAR_DATA* cp, CAR_LOCALS* cl)
 
 	GetFrictionScalesDriver1(cp, cl, &frontFS, &rearFS);
 	thrust = WORLD_FORCE(cp->thrust);
-	slipMax = WORLD_FORCE(12500);
+	slipMax = d1 ? 18000 : WORLD_FORCE(12500);
 	cp->hd.front_vel = 0;
 	cp->hd.rear_vel = 0;
 
@@ -318,7 +346,10 @@ void AddWheelForcesDriver1(CAR_DATA* cp, CAR_LOCALS* cl)
 		}
 
 		oldCompression = wheel->susCompression;
-		newCompression = FIXEDH((surfacePoint[1] - wheelPos[1]) * surfaceNormal[1]) + 14;
+		if (d1)
+			newCompression = surfacePoint[1] - wheelPos[1] + 20;	// D1 takes the plain height difference, no slope factor
+		else
+			newCompression = FIXEDH((surfacePoint[1] - wheelPos[1]) * surfaceNormal[1]) + 14;
 
 		if (newCompression < 0)
 			newCompression = 0;
@@ -351,8 +382,8 @@ void AddWheelForcesDriver1(CAR_DATA* cp, CAR_LOCALS* cl)
 				SetPadVibration(*cp->ai.padid, 3);
 		}
 
-		if (newCompression > 42)
-			newCompression = 42;
+		if (newCompression > susMax)
+			newCompression = susMax;
 
 		if (newCompression == 0 && oldCompression == 0)
 		{
@@ -371,7 +402,10 @@ void AddWheelForcesDriver1(CAR_DATA* cp, CAR_LOCALS* cl)
 			pointVel[2] = FIXEDH(cl->avel[0] * wheelPos[1] - cl->avel[1] * wheelPos[0]) + cl->vel[2];
 
 			// that's our spring
-			susForce = WORLD_FORCE(newCompression * 230 - oldCompression * 100);
+			susForce = newCompression * 230 - oldCompression * 100;
+
+			if (!d1)
+				susForce = WORLD_FORCE(susForce);	// the D1 depth is already in D1 units
 
 			if (wheel->locked)
 			{
@@ -404,11 +438,11 @@ void AddWheelForcesDriver1(CAR_DATA* cp, CAR_LOCALS* cl)
 			slidevel = (pointVel[0] / 64) * (lfx / 64) + (pointVel[2] / 64) * (lfz / 64);
 			wheelspd = ABS((oldSpeed / 64) * (slidevel / 64));
 
-			if (slidevel > 50000)
+			if (slidevel > slideMax)
 			{
 				slidevel = slipMax;
 			}
-			else if (slidevel < -50000)
+			else if (slidevel < -slideMax)
 			{
 				slidevel = -slipMax;
 			}
@@ -513,9 +547,17 @@ void AddWheelForcesDriver1(CAR_DATA* cp, CAR_LOCALS* cl)
 			}
 #endif
 
-			// pursuer cars have more stability
-			if (cp->controlType == CONTROL_TYPE_PURSUER_AI)
+			if (d1)
 			{
+				// D1 lowers the roll lever of every car: cops to 7 / 32 or 8 / 32, all others to 10 / 32
+				if (cp->controlType == CONTROL_TYPE_PURSUER_AI)
+					wheelPos[1] = (wheelPos[1] * (gCopDifficultyLevel == 2 ? 7 : 8)) / 32;
+				else
+					wheelPos[1] = (wheelPos[1] * 10) / 32;
+			}
+			else if (cp->controlType == CONTROL_TYPE_PURSUER_AI)
+			{
+				// pursuer cars have more stability
 				if (gCopDifficultyLevel == 2)
 					wheelPos[1] = (wheelPos[1] * 12) / 32;
 				else
@@ -553,6 +595,7 @@ void AddWheelForcesDriver1(CAR_DATA* cp, CAR_LOCALS* cl)
 
 int gFlyingCar = 0;		// cheat, toggled with F8 or the debug menu
 int gInfiniteMass = 0;	// cheat, toggled with F6 or the debug menu (used in handling.c)
+int gD1ChaseInfiniteMass = 0;	// config.ini [d1dlc] chaseInfiniteMass: the chased car of a Driver 1 mission is never pushed off its path
 int gSpeedBoost = 0;	// cheat (Fun Cheats menu): the horn pushes the player car forward
 int gFlyAscend = 0;		// held keys (left shift / left ctrl)
 int gFlyDescend = 0;

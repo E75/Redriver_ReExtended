@@ -954,6 +954,11 @@ static void AddSunShafts(SVECTOR* sunDir, int visibility)
 #endif
 
 // [D] [T]
+#ifndef PSX
+int gFlareSmooth = 1;		// config.ini [render] lensFlareSmooth: the flare fades in and out as the sun hides behind things, instead of stepping with the sampled pixels
+static int sFlareLevel;		// smoothed flare_col, in 1/16 steps
+#endif
+
 void DrawLensFlare(void)
 {
 	static char last_attempt_failed; // offset 0x0
@@ -989,7 +994,12 @@ void DrawLensFlare(void)
 	source = sun_source;
 
 	if (gWeather - 1U <= 1 || SkyOvercast())
+	{
+#ifndef PSX
+		sFlareLevel = 0;
+#endif
 		return;
+	}
 
 	// the day night cycle moves the sun through dawn and dusk; the fixed sun is not shown in these skies
 	if (skyCycleFrom >= 0 ? (gTimeOfDay != TIME_NIGHT && sun_position[BASE_CITY].vy > -300) : (M_BIT(gTimeOfDay) & (M_BIT(TIME_DAWN) | M_BIT(TIME_DUSK))) != 0)
@@ -1040,6 +1050,21 @@ void DrawLensFlare(void)
 		}
 		while (bufferY < 10);
 	}
+
+#ifndef PSX
+	// the sample counts a handful of pixels: rise quickly, fall slowly
+	if (gFlareSmooth)
+	{
+		int target = flare_col * 16;
+
+		sFlareLevel += (target - sFlareLevel) / (target > sFlareLevel ? 3 : 8);
+
+		if (target > sFlareLevel && target - sFlareLevel < 8) sFlareLevel = target;
+		if (target < sFlareLevel && sFlareLevel - target < 16) sFlareLevel = target;
+
+		flare_col = sFlareLevel / 16;
+	}
+#endif
 
 	gte_SetRotMatrix(&inv_camera_matrix);
 	gte_SetTransVector(&dummy);
