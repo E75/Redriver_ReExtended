@@ -21,6 +21,14 @@ Rules: the base game must not change when the DLC is off or missing. Never commi
 5. **Car select:** WSPC cars in all cities; on the WSPC map also Redriver D1 and D2 cars; D1 map gets no D2 cars for now.
 6. **Damage and lights:** nodes 4 and 5 of the source are body copies (damage states); denting zones as for D1.
 
+## Step 1 status
+
+`tools/wspc/wspc2car.py <car.DOB> <out folder>` writes `CLEAN.MDL`, `DAMAGED.MDL`, `LOW.MDL` (same model for now), `TEXTURE.BIN` (per page: palette count, 15 bit palettes, 4 bit pixels) and `CAR.INFO` (counts, bounds, wheel centres and radius).
+- Model layout (engine order): 36 byte header, vertices (8 bytes), point normals (8 bytes, 4096 = 1.0), polygons, face normals. Polygons are FT3 (id 20) and FT4 (id 21), 20 bytes each, quads go round the edge (source strip order 0,1,3,2), texture set = page 0/1, texture id = palette number of that page, colour = mean of the vertex colours. Source units are used 1:1 (about 250 per metre, like the Redriver lamps).
+- Wheels are left out of the body (the engine draws its own wheel model at the wheel positions); the damage copies and the two hull boxes of the source are left out. Node choice is guessed from the node shapes, `--body` / `--wheels` override it.
+- Checked: the converted files read back by an independent script (`.MDL` + `TEXTURE.BIN` to GLB) look right in the three.js viewer (police car, 17 palettes, 142 vertices, 123 polygons). 16 of 17 vehicles convert (1 page, at most 19 palettes, at most 176 vertices); the tank has 348 vertices and no wheels (tracks), so it needs its own handling.
+- Not done: Gouraud polygons (the source has vertex colours, FT polygons give one colour), damaged model from the source damage copies, low detail model, per car node tables after looking at each car.
+
 ## Open
 
 - How many pages a WSPC car needs after mapping to 2 pages (police car uses several pages with different palettes).
