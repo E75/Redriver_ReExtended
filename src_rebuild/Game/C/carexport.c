@@ -24,6 +24,8 @@
 // packed in one atlas). The body is in the car frame (vertex + cog) and rotated to the glTF frame: (x, -y, -z).
 
 extern char* LevelNames[];
+extern TEXINF* tpage_ids[128];
+extern int tpage_amount;
 
 #define ATLAS_W		256
 #define MAX_TILES	24
@@ -42,6 +44,7 @@ typedef struct
 {
 	short v[3];
 	short tile;		// -1 = flat colour
+	short name;		// index in texNames, -1 = unknown
 	unsigned char u[3], vv[3];
 	unsigned char col[4];
 } TRI;
@@ -49,6 +52,12 @@ typedef struct
 static ATLAS_TILE tiles[MAX_TILES];
 static int numTiles;
 static TRI tris[MAX_TRIS];
+
+// the textures of the car by name: how many triangles and where they sit (car frame), for lamps and later face groups
+#define MAX_NAMES	48
+static char texNames[MAX_NAMES][24];
+static int texCount[MAX_NAMES], texMin[MAX_NAMES][3], texMax[MAX_NAMES][3];
+static int numNames;
 static int numTris;
 
 // ---- PNG (stored deflate blocks, no compression) ----
@@ -242,6 +251,47 @@ static int FindTile(int tpage, int clut, const unsigned char* u, const unsigned 
 	return i;
 }
 
+// the name of the texture that holds texel (u, v) of a page
+static int NameOfTexel(int tpage, int u, int v)
+{
+	int i, j;
+
+	if (!texturename_buffer)
+		return -1;
+
+	for (i = 0; i < tpage_amount; i++)
+	{
+		if ((texture_pages[i] & 0x3fff) != (tpage & 0x3fff))
+			continue;
+
+		for (j = 0; j < tpage_texamts[i]; j++)
+		{
+			const TEXINF* t = &tpage_ids[i][j];
+
+			if (u >= t->x && u < t->x + t->width && v >= t->y && v < t->y + t->height)
+			{
+				const char* n = texturename_buffer + t->nameoffset;
+				int k;
+
+				for (k = 0; k < numNames; k++)
+				{
+					if (!strcmp(texNames[k], n))
+						return k;
+				}
+
+				if (numNames >= MAX_NAMES)
+					return -1;
+
+				strncpy(texNames[numNames], n, sizeof(texNames[0]) - 1);
+				texNames[numNames][sizeof(texNames[0]) - 1] = 0;
+				return numNames++;
+			}
+		}
+	}
+
+	return -1;
+}
+
 static void AddTri(unsigned int indices, int tpage, int clut, const unsigned short* uv, const unsigned char* col)
 {
 	TRI* t;
@@ -265,11 +315,15 @@ static void AddTri(unsigned int indices, int tpage, int clut, const unsigned sho
 		}
 
 		t->tile = FindTile(tpage, clut, u, v, 3);
+		t->name = NameOfTexel(tpage, (u[0] + u[1] + u[2]) / 3, (v[0] + v[1] + v[2]) / 3);
 		memcpy(t->u, u, 3);
 		memcpy(t->vv, v, 3);
 	}
 	else
+	{
 		t->tile = -1;
+		t->name = -1;
+	}
 
 	memcpy(t->col, col, 4);
 	numTris++;
@@ -285,6 +339,7 @@ static void CollectTris(const CAR_MODEL* car)
 
 	numTiles = 0;
 	numTris = 0;
+	numNames = 0;
 
 	for (pass = 0; pass < 3; pass++)
 	{
@@ -541,9 +596,54 @@ static int WriteJson(const char* path, const char* id, const char* name, int cit
 		fprintf(f, "%s", w < 3 ? ", " : "");
 	}
 
-	fprintf(f, "]\n  }\n}\n");
+	fprintf(f, "]\n  },\n  \"textures\": [\n");
+
+	for (w = 0; w < numNames; w++)
+	{
+		fprintf(f, "    { \"name\": \"%s\", \"tris\": %d, \"min\": ", texNames[w], texCount[w]);
+		Vec(f, texMin[w][0], texMin[w][1], texMin[w][2]);
+		fprintf(f, ", \"max\": ");
+		Vec(f, texMax[w][0], texMax[w][1], texMax[w][2]);
+		fprintf(f, " }%s\n", w < numNames - 1 ? "," : "");
+	}
+
+	fprintf(f, "  ]\n}\n");
 	fclose(f);
 	return 1;
+}
+
+// where every texture name sits on the body (car frame)
+static void NameStats(MODEL* model, const CAR_COSMETICS* cc)
+{
+	const SVECTOR* verts = GET_MODEL_DATA(SVECTOR, model, vertices);
+	int i, k, c;
+
+	memset(texCount, 0, sizeof(texCount));
+
+	for (i = 0; i < numTris; i++)
+	{
+		int n = tris[i].name;
+
+		if (n < 0)
+			continue;
+
+		for (k = 0; k < 3; k++)
+		{
+			const SVECTOR* s = &verts[tris[i].v[k]];
+			int ev[3] = { s->vx + cc->cog.vx, s->vy + cc->cog.vy, s->vz + cc->cog.vz };
+
+			for (c = 0; c < 3; c++)
+			{
+				texMin[n][c] = texCount[n] ? MIN(texMin[n][c], ev[c]) : ev[c];
+				texMax[n][c] = texCount[n] ? MAX(texMax[n][c], ev[c]) : ev[c];
+			}
+
+			if (k == 0)
+				texCount[n]++;
+			else if (texCount[n] == 0)
+				texCount[n] = 1;
+		}
+	}
 }
 
 int CarExportWrite(const char* dir, const char* id, const char* name, int city, int model, int slot, const int* comp)
@@ -567,6 +667,7 @@ int CarExportWrite(const char* dir, const char* id, const char* name, int city, 
 	_mkdir(path);
 
 	CollectTris(&NewCarModel[slot]);
+	NameStats(clean, cc);
 
 	sprintf(path, "%s/%s/car.glb", dir, id);
 

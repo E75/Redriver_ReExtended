@@ -354,7 +354,8 @@ function fmt(j) {
 	s += '    "exhaust": ' + v(j.lamps.exhaust) + ',\n    "police": ' + v(j.lamps.police) + '\n  },\n  "raw": {\n';
 	const r = j.raw;
 	s += ['headLight', 'frontInd', 'backInd', 'brakeLight', 'revLight', 'policeLight', 'exhaust', 'smoke', 'fire', 'cog'].map((k) => '    "' + k + '": ' + v(r[k])).join(',\n') + ',\n';
-	s += '    "wheelSize": ' + r.wheelSize + ',\n    "wheelDisp": [' + r.wheelDisp.map(v).join(', ') + ']\n  }\n}\n';
+	s += '    "wheelSize": ' + r.wheelSize + ',\n    "wheelDisp": [' + r.wheelDisp.map(v).join(', ') + ']\n  }';
+	s += j.textures ? ',\n  "textures": [\n' + j.textures.map((t) => '    ' + JSON.stringify(t)).join(',\n') + '\n  ]\n}\n' : '\n}\n';
 	return s;
 }
 

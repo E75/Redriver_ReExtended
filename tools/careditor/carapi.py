@@ -63,7 +63,10 @@ def fmt(j: dict) -> str:
     s += ',\n'.join('    "%s": { "L": %s, "R": %s }' % (k, v(j['lamps'][k]['L']), v(j['lamps'][k]['R'])) for k in PAIRS) + ',\n'
     s += '    "exhaust": %s,\n    "police": %s\n  },\n  "raw": {\n' % (v(j['lamps']['exhaust']), v(j['lamps']['police']))
     s += ',\n'.join('    "%s": %s' % (k, v(r[k])) for k in ['headLight', 'frontInd', 'backInd', 'brakeLight', 'revLight', 'policeLight', 'exhaust', 'smoke', 'fire', 'cog']) + ',\n'
-    s += '    "wheelSize": %d,\n    "wheelDisp": [%s]\n  }\n}\n' % (r['wheelSize'], ', '.join(v(d) for d in r['wheelDisp']))
+    s += '    "wheelSize": %d,\n    "wheelDisp": [%s]\n  }' % (r['wheelSize'], ', '.join(v(d) for d in r['wheelDisp']))
+    if 'textures' in j:
+        s += ',\n  "textures": [\n' + ',\n'.join('    ' + json.dumps(t) for t in j['textures']) + '\n  ]'
+    s += '\n}\n'
     return s
 
 
