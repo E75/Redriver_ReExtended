@@ -2870,7 +2870,10 @@ int MRCreateCar(MS_TARGET *target)
 	target->s.car.slot = curslot;
 
 	target->s.target_flags |= TARGET_FLAG_CAR_PINGED_IN;
-	
+
+	if (IsDriver1ChaseCar(target))
+		target->s.target_flags |= TARGET_FLAG_CAR_D1_CHASE;
+
 	car_data[curslot].inform = &target->s.target_flags;
 
 	// make fully damaged (Car bomb escape)

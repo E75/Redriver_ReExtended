@@ -60,3 +60,12 @@ Descriptions only; the analysis files live outside the repo.
 - Entry layout (offsets inside the 5220 bytes): `0..3000` pad stream (1000 records of 3 bytes: byte 0 high pad byte, byte 1 low pad byte, byte 2 repeat count; word = (b0 << 8 | b1) AND `0xa0fc`; low nibble of b0 selects the steering value from the byte table at `0x8008b6c8`), `3000..4600` traffic ping block, `4600..4620` start state (int frame count, int x, y, z, short rotation, short flags), `4620..5220` more tables. Entries of the same group share the start state, only the pad stream and frame count differ.
 - The chased car is car index 23 (record stride `0x18c`, struct base `0x9b0a4`). Per frame the game fetches the next pad word (`0x8005bf2c`), applies it with `0x8001ff24` (control) and steps the car with `0x8001d608` (physics); car 23 is created at the start state by `0x8001af2c`.
 - Consequence: start pose and inputs are fully known. The route itself needs the D1 car physics. Plan: either capture the route from a real PS1 run in the emulator (every frame position of car 23) or port `0x8001d608`; the emulator capture is exact.
+
+## Chase leader capture with the debugger (European disc, 2026-10-18)
+
+Descriptions only; recordings live outside the repo.
+
+- The European build is the US code shifted: functions after about `0x8005b000` sit `0x5ac` lower (pad decode, loader `0x8005bd6c`), the car physics step is at `0x8001d61c` and the per-frame update at `0x80022f68`. A masked opcode match of 48 words found them.
+- Car records start at `0x9aae0`, stride `0x18c`, position (x, y, z as three ints) at record offset `0x18`; the chased leader is record 23 (as in the US analysis). The physics step gets the record pointer in `a0`.
+- The replay entry is at `0x1fc32c` and can be overwritten with any entry of the same group from REPLAY.BLK (same start state), which forces that variant. The stream read pointer and base pointer sit at `0xbe904` and `0xbe90c`.
+- Findings: a plain per-frame read of record 23 gives a smooth track (speed 70 to 260 units per frame) when the player follows. With an idle player the leader stops after a few hundred frames, so the leader reacts to the player distance; a pure pad-stream replay is not enough to reproduce its speed. A savestate taken mid-mission cannot be used for other variants because the pad stream is already consumed.

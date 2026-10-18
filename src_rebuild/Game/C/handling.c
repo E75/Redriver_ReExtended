@@ -593,8 +593,10 @@ void GlobalTimeStep(void)
 						do1 = 4096;
 					}
 
-					c1InfiniteMass = cp->controlType == CONTROL_TYPE_CUTSCENE || m1 == 0x7fff || (gInfiniteMass && cp->controlType == CONTROL_TYPE_PLAYER);
-					c2InfiniteMass = c1->controlType == CONTROL_TYPE_CUTSCENE || m2 == 0x7fff || (gInfiniteMass && c1->controlType == CONTROL_TYPE_PLAYER);
+					c1InfiniteMass = cp->controlType == CONTROL_TYPE_CUTSCENE || m1 == 0x7fff || (gInfiniteMass && cp->controlType == CONTROL_TYPE_PLAYER) ||
+						(gD1ChaseInfiniteMass && cp->inform && (*cp->inform & TARGET_FLAG_CAR_D1_CHASE));
+					c2InfiniteMass = c1->controlType == CONTROL_TYPE_CUTSCENE || m2 == 0x7fff || (gInfiniteMass && c1->controlType == CONTROL_TYPE_PLAYER) ||
+						(gD1ChaseInfiniteMass && c1->inform && (*c1->inform & TARGET_FLAG_CAR_D1_CHASE));
 
 					// [A] if any checked cars has infinite mass, reduce bouncing
 					// TODO: very easy difficulty

@@ -23,6 +23,15 @@
 // (gravity -10922, throttle 7200, slip clamp 18000, collision friction 1440 / 8640). Driver 2 cities (cell 2048) stay as they are.
 #define WORLD_FORCE(v)		((int)((long long)(v) * MAP_CELL_SIZE / 2048))
 
+int gD1Handling = 1;	// config.ini [d1dlc] d1Handling: Driver 1 cities use the speed and length limits of the D1 EXE (docs/dev-notes/d1-car-physics.md)
+
+// The D2 code is the D1 code with every speed and length divided by 1.4648; WORLD_FORCE only undoes that for the forces,
+// so in a D1 city the limits that compare speeds or depths take their D1 value here.
+int D1HandlingActive(void)
+{
+	return gD1Handling && MAP_CELL_SIZE != 2048;
+}
+
 struct CAR_LOCALS
 {
 	LONGVECTOR4 vel;
@@ -65,9 +74,11 @@ void GetFrictionScalesDriver1(CAR_DATA* cp, CAR_LOCALS* cl, int* frontFS, int* r
 {
 	int autoBrake;
 	int q;
+	int lockSpeed;
 	_HANDLING_TYPE* hp;
 
 	hp = &handlingType[cp->hndType];
+	lockSpeed = D1HandlingActive() ? 61440 : 41943;
 
 	if (cp->thrust < 0)
 		*frontFS = 1453;
@@ -93,7 +104,7 @@ void GetFrictionScalesDriver1(CAR_DATA* cp, CAR_LOCALS* cl, int* frontFS, int* r
 		D_CHECK_ERROR(hp->autoBrakeOn == 2, "invalid autoBrakeOn");
 	}
 
-	if ((cp->thrust < 0 && cp->hd.wheel_speed > 41943 && cp->hndType == 0) ||
+	if ((cp->thrust < 0 && cp->hd.wheel_speed > lockSpeed && cp->hndType == 0) ||
 		(cp->controlType == CONTROL_TYPE_CIV_AI && cp->ai.c.thrustState == CIV_AI_THRUST_STOP && cp->ai.c.ctrlState != CIV_AI_CTRL_DIED_WITH_MUSIC))
 	{
 		cp->hd.wheel[3].locked = 1;
@@ -141,7 +152,7 @@ void GetFrictionScalesDriver1(CAR_DATA* cp, CAR_LOCALS* cl, int* frontFS, int* r
 		cp->thrust = FIXEDH(cp->ap.carCos->powerRatio * 5000);
 	}
 
-	if (cp->thrust < 0 && cp->hd.wheel_speed > 41943 && cl->aggressive != 0)
+	if (cp->thrust < 0 && cp->hd.wheel_speed > lockSpeed && cl->aggressive != 0)
 	{
 		*frontFS = (*frontFS * 10) / 8;
 		*rearFS = (*rearFS * 10) / 8;
@@ -553,6 +564,7 @@ void AddWheelForcesDriver1(CAR_DATA* cp, CAR_LOCALS* cl)
 
 int gFlyingCar = 0;		// cheat, toggled with F8 or the debug menu
 int gInfiniteMass = 0;	// cheat, toggled with F6 or the debug menu (used in handling.c)
+int gD1ChaseInfiniteMass = 1;	// config.ini [d1dlc] chaseInfiniteMass: the chased car of a Driver 1 mission is never pushed off its path
 int gSpeedBoost = 0;	// cheat (Fun Cheats menu): the horn pushes the player car forward
 int gFlyAscend = 0;		// held keys (left shift / left ctrl)
 int gFlyDescend = 0;
