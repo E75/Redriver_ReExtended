@@ -35,6 +35,13 @@ Click a point or pick it in the list, drag the arrows or type x / y / z. *mirror
 other wheel of the axle) along. Views front / side / rear / top, optional orthographic camera, double sided and wireframe toggles
 show a wrong winding or a missing texture. *Reset point* goes back to the last saved value.
 
+## Command line API (tools/careditor/carapi.py)
+
+For fixing cars without the editor: `list`, `get <id>`, `set|nudge <id> <point> x y z` (a lamp pair or wheel pair moves its mirror image
+too, `--single` not), `radius`, and `shots <id>... --game <install> --out <dir> --views front,side,rear --sheet x.png`, which starts the
+game in the car showroom (`-carsdir <dir> -spawnid <id> -spawnangle <n> -lightson -shot 150`) and cuts out the car. The game reads the
+same folder (`CARS/` or `-carsdir`), so a fix is: shots, compare the lamp flares with the housings, nudge, shots again.
+
 ## Not done yet
 
 - Import: the game reading `car.json` (corrected lamps / wheels) instead of the built-in values.

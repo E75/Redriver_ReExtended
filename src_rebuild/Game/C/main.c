@@ -2539,6 +2539,18 @@ int redriver2_main(int argc, char** argv)
 			gD1WheelPercent = atoi(argv[i + 1]);
 			i++;
 		}
+		else if (!strcmp(argv[i], "-spawnangle") && argc - i >= 2)
+		{
+			extern int gSpawnAngle;
+			gSpawnAngle = atoi(argv[i + 1]);
+			i++;
+		}
+		else if (!strcmp(argv[i], "-spawnid") && argc - i >= 2)
+		{
+			extern char gSpawnId[48];
+			strncpy(gSpawnId, argv[i + 1], 47);
+			i++;
+		}
 		else if (!strcmp(argv[i], "-carsdir") && argc - i >= 2)
 		{
 			strncpy(gCarsDir, argv[i + 1], sizeof(gCarsDir) - 1);

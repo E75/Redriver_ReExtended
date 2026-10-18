@@ -73,6 +73,8 @@ static int spawnPending = -1;		// start the showroom at this car at the next ste
 static int spawnAuto = 0;			// test: 1 presses right, 2 presses start, 40 steps into the showroom
 static int spawnX, spawnZ, spawnDir;
 static char spawnText[64];
+int gSpawnAngle = 0;			// -spawnangle <n>: the showroom camera stays at this angle (2048 = behind the car), 0 = circles
+char gSpawnId[48];			// -spawnid <city>_<model>: the showroom starts at this car (carovr.c CarOverrideId)
 static char exportDir[260];		// -carexport: the folder of the export, empty = off
 
 static void AddCar(int city, int model, const char* name)
@@ -649,6 +651,21 @@ static void StartShowroom(int index)
 	}
 
 	spawnIndex = (index >= 0 && index < spawnCount) ? index : 0;
+
+	if (gSpawnId[0])
+	{
+		int i;
+
+		for (i = 0; i < spawnCount; i++)
+		{
+			char id[48];
+
+			CarOverrideId(id, spawnList[i].city, spawnList[i].model);
+
+			if (!strcmp(id, gSpawnId))
+				spawnIndex = i;
+		}
+	}
 	spawnFrame = 0;
 	spawnPlaced = 0;
 
@@ -720,7 +737,7 @@ int CarSpawnerUpdate(int pressed)
 
 	spawnFrame++;
 	gCantDrive = 1;
-	gCamAngleOverride = 2048 + ((spawnFrame * 6) & 2047);	// the camera circles the car
+	gCamAngleOverride = gSpawnAngle ? gSpawnAngle : 2048 + ((spawnFrame * 6) & 2047);	// the camera circles the car
 
 	if (exportDir[0])
 	{
