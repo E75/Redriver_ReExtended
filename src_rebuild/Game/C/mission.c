@@ -2346,7 +2346,7 @@ int MRProcessTarget(MR_THREAD *thread, MS_TARGET *target)
 				// the road speed limit of the civilian AI is lifted to the highest one, lowered again for the bends ahead
 				if (IsDriver1ChaseCar(target) && cp->controlType == CONTROL_TYPE_CIV_AI)
 				{
-					cp->ai.c.maxSpeed = CivCornerSpeed(cp);
+					cp->ai.c.maxSpeed = CivCornerSpeed(cp, WorldSpeedLimit(2));
 					civCornerBrake[cp->id] = 1;				}
 
 				// recorded route of the original run, then the civilian AI takes over

@@ -30,7 +30,25 @@ Extends `CivJamBreaker` / `CivControl` / `CivSteerAngle` / `SetUpCivCollFlags` i
 - Test counters: `gCivSwerveCount`, existing `gCivReverseCount`.
 - Done when: a car parked across a lane (player car left in a lane) is passed after ~2-3 s instead of a queue for 30 s; cars that hit a wall back out and rejoin; no car ever swerves out of a queue at a red light.
 
-## Part 2 - speed (todo)
+## Parts 2-4 - result (status: done 2026-10-19, one commit)
+
+Take a Ride, `crowdMul` 3, 80 s, player standing, no jam hook; `standing steps` smart 0 -> 1 (lower is better), average speed, lane changes by the new code. Runs are deterministic per build and setting (3 repeats gave identical numbers).
+
+- Chicago 432 -> 412, speed 50 -> 50, 99 lane changes.
+- Frisco 9129 -> 5403, speed 43 -> 41.
+- Vegas 17197 -> 10609, speed 40 -> 38, highway speed 51 -> 52.
+- Rio 118 -> 371, highway speed 44 -> 41. With the strong exit bias first tried it was 782; without weighted exits 181.
+- Havana 5118 -> 5360, Miami 2528 -> 2853 (small rises, open).
+- `near contacts` rises 1.3-2x: overtaking cars and hasty drivers run closer.
+
+Findings:
+- Lane index = one 512-wide lane; `AILanes`/`LaneDirs` bits are per lane pair (`lane / 2`).
+- Only Vegas and Rio have speed limit id 2 roads (all with 4 lanes the car's way); Chicago's wide roads are id 1. Highway = id 2 and 2+ lanes the same way.
+- The +25 % highway speed barely shows in the average: cars rarely reach the limit (bends, followers). A free-flow metric (cars without a leader) is needed to tune it further (open).
+- `Random2` returns one value per frame; per-car draws use `Random2(0) + id * 40503` split into bit fields.
+- The free-road IDM fade `1 - (v/v0)^4` made cars cruise slower (Chicago 50 -> 45); full push up to the limit is used instead.
+
+## Part 2 - speed (done)
 
 - Driver variety: per car `civDriverFactor[id]` 85..115 % from the car id and `Random2`, scales `maxSpeed` and `newAccel`; 3 % of cars are hasty (115-125 %, smaller gap, `CIV_HEADWAY_STEPS` x 0.7).
 - Fast roads: speed limit id 2 (top tier of `speedLimits`) gets +25 % when the road has 2+ lanes in the car's direction (highway feel); `WorldSpeedLimit` stays the base.
@@ -38,7 +56,10 @@ Extends `CivJamBreaker` / `CivControl` / `CivSteerAngle` / `SetUpCivCollFlags` i
 - Bend braking for every civ car (today only `civCornerBrake` cars): `CivCornerSpeed` look-ahead, with the limit from curve radius (`v = sqrt(a_lat * r)`), so faster cars slow before bends.
 - Done when: cars on a straight multi-lane fast road visibly cruise faster than on side streets, speeds differ per car, no car leaves the road in a bend at the higher speeds.
 
-## Part 3 - overtaking, keep right, merging (todo)
+## Part 3 - overtaking, keep right, merging (done, except merging)
+
+Built: `CivSmartLaneChange` at each new route node (no ctrl/turn node, no indicator, not swerving, not a mission car): overtake left then right when the leader is under 85 % of the wanted speed and the side lane is free (`CivLaneGapFree`: 20 steps of own travel ahead, closing speed x 30 steps behind) and faster; keep right when nothing brakes us. Not built: per-step checks, MOBIL braking test, gap acceptance when entering a road (existing junction yields stay).
+
 
 - Continuous lane change on straights with 2+ lanes in the same direction (`ROAD_LANES_COUNT`, `ROAD_LANE_DIR`, `ROAD_IS_AI_LANE`, `dr2roads.h`): check every 4th step per car (staggered by id).
 - Incentive (simple MOBIL): the leader is slower than 85 % of my wanted speed and closer than 3 s; target lane leader is farther or faster; safety: the new follower's gap is at least 1.0 s x its speed + one car length and it would not have to brake harder than `bSafe` (falls from 4 to 17 m/s^2 equivalent as speed drops).
@@ -47,14 +68,17 @@ Extends `CivJamBreaker` / `CivControl` / `CivSteerAngle` / `SetUpCivCollFlags` i
 - Merging at junction exits: entering a road, wait for a gap of 2 s in the target lane (gap acceptance), shrinking with waiting time (impatience).
 - Done when: on a 2+ lane road a slow car is passed; cars return right; no lane change into a car.
 
-## Part 4 - route choice and junction manners (todo)
+## Part 4 - route choice and junction manners (done: weighted exits only)
+
+Built: `CivExitWeight` = (speed limit id + lanes the same way + 2) x (3 + cos(trip heading - exit heading)), trip heading re-rolled at 1 in 8 junctions. Existing turn-lane rules and junction yields kept. Not built: don't-block-the-box, yield to the bigger road.
+
 
 - Turn lanes: in `GetNextRoadInfo` the leftmost lane may turn left, rightmost right, middle straight (mirrored for left-hand traffic if a city uses it); lane changes before the junction to reach the right lane.
 - Weighted exits instead of `Random2(0) % 3`: weight by road class (lanes x speed limit) plus a per-car "trip" bias (a heading kept for 30-60 s), so cars flow along main roads instead of zig-zagging; dead ends get weight 0 unless nothing else.
 - Junctions without lights: yield to the right / to the bigger road; don't enter a junction whose exit lane is full (don't block the box), released after 4 s waiting.
 - Done when: traffic visibly follows main roads, fewer cars in side streets, fewer deadlocks in junctions.
 
-## Part 5 - pedestrians (todo, `pedest.c`)
+## Part 5 - pedestrians (skipped 2026-10-19: peds keep the old logic)
 
 - Predictive dodge: a car that reaches the ped within 1 s makes it step aside (away from the car's path) before it has to jump; horns and fast player cars make nearby peds flee for 2 s.
 - Crossing: at junctions with lights, peds cross during the pedestrian part of `TrafficLightCycle`; elsewhere cross only with a 4 s gap in both directions.

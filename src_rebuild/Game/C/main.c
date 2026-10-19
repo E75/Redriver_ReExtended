@@ -2050,9 +2050,10 @@ void DrawGame(void)
 			gPingFail[0], gPingFail[1], gPingFail[2], gPingFail[3], gPingFail[4], gPingFail[5], gPingFail[6], gPingFail[7], gPingFail[8], gPingFail[9], gPingFail[10], gPingFail[11], gPingFail[12], gPingFail[13]);
 
 		extern int gPedPingFail[4];
-		extern int gCivReverseCount, gCivNearContact, gCivSwerveCount, gCivStandSteps;
-		printInfo("shot: car following: reverse manoeuvres %d, near contacts %d, went round %d, standing steps %d\n", gCivReverseCount, gCivNearContact,
-			gCivSwerveCount, gCivStandSteps);
+		extern int gCivReverseCount, gCivNearContact, gCivSwerveCount, gCivStandSteps, gCivSpeedSum[2], gCivSpeedSteps[2], gCivLaneChanges;
+		printInfo("shot: car following: reverse manoeuvres %d, near contacts %d, went round %d, standing steps %d, average speed %d, on highways %d (%d steps), lane changes %d\n",
+			gCivReverseCount, gCivNearContact, gCivSwerveCount, gCivStandSteps, gCivSpeedSteps[0] ? gCivSpeedSum[0] / gCivSpeedSteps[0] : 0,
+			gCivSpeedSteps[1] ? gCivSpeedSum[1] / gCivSpeedSteps[1] : 0, gCivSpeedSteps[1], gCivLaneChanges);
 
 		printInfo("shot: ped ping in results: spawned %d, no pavement %d, too close %d\n", gPedPingFail[0], gPedPingFail[1], gPedPingFail[2]);
 

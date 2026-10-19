@@ -43,7 +43,7 @@ extern int CivCarsNearPlayer(void);
 extern void UpdateCivDeficit(void);	// once per ping in round: fewer cars than the target near the player
 extern unsigned char civCornerBrake[MAX_CARS];
 extern int gSmartTraffic;		// config.ini [ai] smartTraffic
-extern int CivCornerSpeed(CAR_DATA* cp);	// speed limit for the bends ahead on the route of a chased car
+extern int CivCornerSpeed(CAR_DATA* cp, int top);	// speed limit for the bends ahead on the route, top = speed on a straight
 #endif
 extern void CreateRoadblock(); // 0x0002BCF4
 

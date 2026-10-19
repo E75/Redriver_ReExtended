@@ -87,9 +87,76 @@ unsigned char civCornerBrake[MAX_CARS];		// the mission code sets it every step 
 int gSmartTraffic = 1;						// config.ini [ai] smartTraffic: 0 = traffic as before docs/dev-notes/smart-traffic-plan.md
 int gCivSwerveCount;							// test log: cars that went round a standing car
 int gCivStandSteps;							// test log: steps of driving cars in view standing still without a red light
+int gCivSpeedSum[2], gCivSpeedSteps[2];		// test log: average speed of moving civilian cars, [1] = on highways
+int gCivLaneChanges;							// test log: lane changes to overtake or keep right
 int gCivReverseCount;							// test log: reverse manoeuvres started
 int gCivNearContact;							// test log: steps a moving car had another car closer than half its length
+static unsigned char civDriverFactor[MAX_CARS];	// percent of the road speed and acceleration this driver uses
+static unsigned char civHasty[MAX_CARS];		// a hasty driver keeps a shorter gap
+static unsigned char civOnHighway[MAX_CARS];	// the car's road is a fast one with two or more lanes its way
+static short civTripHeading[MAX_CARS];			// rough heading the driver keeps for a few junctions (4096 = full turn)
 #endif
+
+#if defined(DEBUG_OPTIONS) && !defined(PSX)
+#include <stdlib.h>
+static int OldFollow(void)	// test switch: REDRIVER2_OLDFOLLOW=1 gives the original look-ahead, no gap rule and no backing up
+{
+	static int old = -1;
+	if (old < 0)
+		old = getenv("REDRIVER2_OLDFOLLOW") != NULL;
+	return old;
+}
+#else
+#define OldFollow() 0
+#endif
+
+#ifndef PSX
+#define SmartTraffic() (gSmartTraffic && !OldFollow())
+#endif
+
+#ifndef PSX
+static int CivLanesSameWay(DRIVER2_ROAD_INFO* rd, int lane)
+{
+	int i, sameWay = 0;
+
+	for (i = 0; i < (int)ROAD_WIDTH_IN_LANES(rd); i++)
+	{
+		if (ROAD_IS_AI_LANE(rd, i) && ROAD_LANE_DIR(rd, i) == ROAD_LANE_DIR(rd, lane))
+			sameWay++;
+	}
+
+	return sameWay;
+}
+
+// main roads draw more traffic and a car keeps a rough heading for a while, so traffic flows instead of zig-zagging
+static int CivExitWeight(CAR_DATA* cp, DRIVER2_ROAD_INFO* rd, int lane, int heading)
+{
+	int roadClass = ROAD_SPEED_LIMIT(rd) + CivLanesSameWay(rd, lane) + 2;
+
+	// mild bias (main road about 2x, trip heading 2x): a strong pull piled cars into queues on the main roads
+	return roadClass * (12288 + RCOS(DIFF_ANGLES(civTripHeading[cp->id], heading & 4095))) / 1024 + 1;
+}
+#endif
+
+// highway feel: a quarter faster on a fast road with two or more lanes the car's way; drivers differ in speed
+static int CivRoadSpeed(CAR_DATA* cp, DRIVER2_ROAD_INFO* rd, int lane)
+{
+	int speed = WorldSpeedLimit(ROAD_SPEED_LIMIT(rd));
+#ifndef PSX
+	int sameWay = CivLanesSameWay(rd, lane);
+
+	civOnHighway[cp->id] = ROAD_SPEED_LIMIT(rd) >= 2 && sameWay >= 2;
+
+	if (SmartTraffic())
+	{
+		if (civOnHighway[cp->id])
+			speed += speed / 4;
+
+		speed = speed * civDriverFactor[cp->id] / 100;
+	}
+#endif
+	return speed;
+}
 
 #if defined(DEBUG_OPTIONS) && !defined(PSX)
 int gCarPopIns;
@@ -216,6 +283,18 @@ int InitCar(CAR_DATA* cp, int direction, LONGVECTOR4* startPos, unsigned char co
 	civReverseLeft[cp->id] = 0;
 	civSwerveLeft[cp->id] = 0;
 	civCornerBrake[cp->id] = 0;
+	civHasty[cp->id] = 0;
+	civDriverFactor[cp->id] = 100;
+
+	// 3% hasty drivers, the rest 85..115% of the road speed; Random2 is one value per frame, so split its bits per car
+	if (SmartTraffic() && control == CONTROL_TYPE_CIV_AI)
+	{
+		int r = (Random2(0) + cp->id * 40503) & 65535;
+
+		civHasty[cp->id] = (r & 127) < 4;
+		civDriverFactor[cp->id] = civHasty[cp->id] ? 115 + (r >> 7) % 11 : 85 + (r >> 7) % 31;
+		civTripHeading[cp->id] = (r * 2654435761u >> 20) & 4095;
+	}
 #endif
 
 	if (startPos == NULL)
@@ -438,6 +517,9 @@ int GetNextRoadInfo(CAR_DATA* cp, int randomExit, int* turnAngle, int* startDist
 
 	int oppDir, oldOppDir;
 	int turnDir, currentLaneDir;
+#ifndef PSX
+	int exitWeight[3];
+#endif
 
 	currentRoadId = cp->ai.c.currentRoad;
 
@@ -604,6 +686,9 @@ int GetNextRoadInfo(CAR_DATA* cp, int randomExit, int* turnAngle, int* startDist
 			{
 				validExitIdx[exitCnt] = exitIdx;
 				numExits++;
+#ifndef PSX
+				exitWeight[exitCnt] = CivExitWeight(cp, &roadInfo, newLane, turnDir);
+#endif
 			}
 			else
 			{
@@ -646,14 +731,45 @@ int GetNextRoadInfo(CAR_DATA* cp, int randomExit, int* turnAngle, int* startDist
 			return 0;
 		}
 		
-		// randomize exit selection
-		rnd = Random2(0) % 3;
-
-		do
+#ifndef PSX
+		if (SmartTraffic())
 		{
-			bestExit = validExitIdx[rnd % 3];
-			rnd++;
-		} while (bestExit == 42);
+			int r = (Random2(0) + cp->id * 40503) & 65535;
+			int total = 0, pick;
+
+			for (exitCnt = 0; exitCnt < 3; exitCnt++)
+				total += validExitIdx[exitCnt] != 42 ? exitWeight[exitCnt] : 0;
+
+			pick = (r & 8191) % MAX(total, 1);
+
+			// a new trip heading every few junctions, used from the next one on
+			if ((r >> 13) == 0)
+				civTripHeading[cp->id] = (r * 2654435761u >> 20) & 4095;
+
+			for (exitCnt = 0; exitCnt < 3; exitCnt++)
+			{
+				if (validExitIdx[exitCnt] == 42)
+					continue;
+
+				bestExit = validExitIdx[exitCnt];
+				pick -= exitWeight[exitCnt];
+
+				if (pick < 0)
+					break;
+			}
+		}
+		else
+#endif
+		{
+			// randomize exit selection
+			rnd = Random2(0) % 3;
+
+			do
+			{
+				bestExit = validExitIdx[rnd % 3];
+				rnd++;
+			} while (bestExit == 42);
+		}
 		
 		newRoad = jn->ExitIdx[bestExit];
 
@@ -955,7 +1071,7 @@ int GetNextRoadInfo(CAR_DATA* cp, int randomExit, int* turnAngle, int* startDist
 					*startDist = 0;
 			}
 
-			cp->ai.c.maxSpeed = WorldSpeedLimit(ROAD_SPEED_LIMIT(&roadInfo));
+			cp->ai.c.maxSpeed = CivRoadSpeed(cp, &roadInfo, newLane);
 		}
 	}
 
@@ -1330,6 +1446,134 @@ int CheckChangeLanes(DRIVER2_STRAIGHT* straight, DRIVER2_CURVE* curve, int distA
 	return currentLane;
 }
 
+#ifndef PSX
+#define OVERTAKE_SLOWER_PCT		85		// a car ahead slower than this share of the own wanted speed is overtaken
+#define LANE_GAP_AHEAD_STEPS	20		// free room ahead in the new lane: own travel in this many steps
+#define LANE_GAP_BEHIND_STEPS	30		// free room behind: what a faster car there closes in this many steps
+#define LANE_WIDTH				512
+
+extern int brakeLength[MAX_CARS];		// set by SetUpCivCollFlags further down
+extern int brakeLeadSpeed[MAX_CARS];
+extern int brakeLeadCar[MAX_CARS];
+
+// start the lane change the way CheckChangeLanes does (indicator, gradual slide over the next nodes)
+static void CivChangeLaneTo(CAR_DATA* cp, int newLane, int right)
+{
+	cp->ai.c.changeLaneIndicateCount = 161;
+	cp->ai.c.oldLane = cp->ai.c.currentLane;
+	cp->ai.c.changeLaneCount = 4;
+	cp->ai.c.changeLane = right;
+	cp->ai.c.currentLane = newLane;
+	gCivLaneChanges++;
+}
+
+// the neighbouring lane the same way on the given side, -1 if there is none the AI may drive in
+static int CivSideLane(DRIVER2_ROAD_INFO* rd, int lane, int right)
+{
+	int dir = ROAD_LANE_DIR(rd, lane);
+	int side = (dir == 0) == (right != 0) ? lane - 1 : lane + 1;
+
+	if (side < 0 || side >= (int)ROAD_WIDTH_IN_LANES(rd) || !ROAD_IS_AI_LANE(rd, side) || ROAD_LANE_DIR(rd, side) != dir ||
+		ROAD_IS_PARKING_ALLOWED_AT(rd, side))
+		return -1;
+
+	return side;
+}
+
+// free room in the side lane ahead and behind; *aheadSpeed = speed of the nearest car ahead there (1000 when empty)
+static int CivLaneGapFree(CAR_DATA* cp, int right, int* aheadSpeed)
+{
+	int fx = cp->hd.where.m[0][2], fz = cp->hd.where.m[2][2];
+	int rx = cp->hd.where.m[0][0], rz = cp->hd.where.m[2][0];
+	int v = FIXEDH(cp->hd.wheel_speed);
+	int lbody = cp->ap.carCos->colBox.vz;
+	int target = right ? LANE_WIDTH : -LANE_WIDTH;
+	int nearest = 0x7fffffff;
+
+	*aheadSpeed = 1000;
+
+	for (CAR_DATA* other = car_data; other < &car_data[MAX_CARS]; other++)
+	{
+		int dx, dz, along, side, ov;
+
+		if (other == cp || other->controlType == CONTROL_TYPE_NONE)
+			continue;
+
+		dx = other->hd.where.t[0] - cp->hd.where.t[0];
+		dz = other->hd.where.t[2] - cp->hd.where.t[2];
+
+		if (ABS(dx) > 8000 || ABS(dz) > 8000)
+			continue;
+
+		along = FIXEDH(dx * fx + dz * fz);
+		side = FIXEDH(dx * rx + dz * rz);
+
+		if (ABS(side - target) > LANE_WIDTH * 3 / 4)
+			continue;
+
+		ov = FIXEDH(other->hd.wheel_speed);
+
+		if (along >= 0)
+		{
+			if (along < lbody * 2 + v * LANE_GAP_AHEAD_STEPS)
+				return 0;
+
+			if (along < nearest)
+			{
+				nearest = along;
+				*aheadSpeed = ov;
+			}
+		}
+		else if (-along < lbody * 2 + MAX(0, ov - v) * LANE_GAP_BEHIND_STEPS + ov * 10)
+			return 0;
+	}
+
+	return 1;
+}
+
+// two or more lanes the car's way: pass a slow car ahead, else move back right when that lane is free
+static void CivSmartLaneChange(CAR_DATA* cp, DRIVER2_ROAD_INFO* rd)
+{
+	int lane = cp->ai.c.currentLane;
+	int v = FIXEDH(cp->hd.wheel_speed);
+	int right, aheadSpeed;
+
+	if (cp->ai.c.ctrlState != CIV_AI_CTRL_DRIVE || cp->ai.c.changeLaneIndicateCount != 0 || cp->ai.c.ctrlNode != NULL ||
+		cp->ai.c.turnNode != -1 || civSwerveLeft[cp->id] != 0 || cp->inform != NULL || v < 10)
+		return;
+
+	if (brakeLength[cp->id] != 0 && brakeLeadCar[cp->id] != 0 &&
+		brakeLeadSpeed[cp->id] < cp->ai.c.maxSpeed * OVERTAKE_SLOWER_PCT / 100)
+	{
+		// overtake on the left, else on the right
+		for (right = 0; right < 2; right++)
+		{
+			int side = CivSideLane(rd, lane, right);
+
+			if (side >= 0 && CivLaneGapFree(cp, right, &aheadSpeed) && aheadSpeed > brakeLeadSpeed[cp->id] + 3)
+			{
+				CivChangeLaneTo(cp, side, right);
+				return;
+			}
+		}
+
+		return;
+	}
+
+	// keep right: nothing slow ahead, the right lane is free and nobody slow in it
+	if (brakeLength[cp->id] == 0)
+	{
+		int side = CivSideLane(rd, lane, 1);
+
+		if (side >= 0 && CivLaneGapFree(cp, 1, &aheadSpeed) && aheadSpeed >= cp->ai.c.maxSpeed * OVERTAKE_SLOWER_PCT / 100)
+		{
+			CivChangeLaneTo(cp, side, 1);
+			return;
+		}
+	}
+}
+#endif
+
 int makeNextNodeCtrlNode = -1;
 
 // [D] [T]
@@ -1479,6 +1723,11 @@ int CreateNewNode(CAR_DATA * cp)
 							makeLimoPullOver = 1;
 						}
 					}
+
+#ifndef PSX
+					if (SmartTraffic() && !makeLimoPullOver)
+						CivSmartLaneChange(cp, &roadInfo);
+#endif
 
 					// try parking it
 					if ((Random2(0) + cp->id * 32 & 0xf1) == 0xf1 || makeLimoPullOver)
@@ -1651,8 +1900,8 @@ int InitCivState(CAR_DATA * cp, EXTRA_CIV_DATA * extraData)
 
 		if(GetSurfaceRoadInfo(&roadInfo, cs->currentRoad))
 		{
-			cp->ai.c.maxSpeed = WorldSpeedLimit(ROAD_SPEED_LIMIT(&roadInfo));
-			
+			cp->ai.c.maxSpeed = CivRoadSpeed(cp, &roadInfo, cp->ai.c.currentLane);
+
 			InitNodeList(cp, extraData);
 
 			cp->ai.c.pnode = &cp->ai.c.targetRoute[0];
@@ -3020,6 +3269,23 @@ int CivAccelTrafficRules(CAR_DATA * cp, int* distToNode)
 			}
 
 
+#ifndef PSX
+			// full push up to the wanted speed: a push fading near it (free road IDM term) made cars cruise slower
+			if (SmartTraffic() && !civCornerBrake[cp->id])
+			{
+				int limit = MIN(cp->ai.c.maxSpeed, CivCornerSpeed(cp, cp->ai.c.maxSpeed));
+				int v = FIXEDH(cp->hd.wheel_speed);
+
+				if (v > limit + limit / 10)
+					return -newAccel;
+
+				if (v >= limit || limit <= 0)
+					return newAccel >> 2;
+
+				return newAccel * civDriverFactor[cp->id] / 100;
+			}
+#endif
+
 			if (FIXEDH(cp->hd.wheel_speed) > cp->ai.c.maxSpeed)
 			{
 #ifndef PSX
@@ -3209,23 +3475,6 @@ int CivAccelTrafficRules(CAR_DATA * cp, int* distToNode)
 int brakeLength[MAX_CARS];
 int brakeLeadSpeed[MAX_CARS];		// speed (units per step) of the car that sets brakeLength, along the own heading
 int brakeLeadCar[MAX_CARS];			// index + 1 of the car that sets brakeLength, 0 = none or Tanner
-
-#if defined(DEBUG_OPTIONS) && !defined(PSX)
-#include <stdlib.h>
-static int OldFollow(void)	// test switch: REDRIVER2_OLDFOLLOW=1 gives the original look-ahead, no gap rule and no backing up
-{
-	static int old = -1;
-	if (old < 0)
-		old = getenv("REDRIVER2_OLDFOLLOW") != NULL;
-	return old;
-}
-#else
-#define OldFollow() 0
-#endif
-
-#ifndef PSX
-#define SmartTraffic() (gSmartTraffic && !OldFollow())
-#endif
 
 #ifndef PSX
 #define CIV_LOOKAHEAD_STEPS		20		// the look-ahead box covers this many steps of travel (13 in the original)
@@ -3462,10 +3711,10 @@ void SetUpCivCollFlags(void)
 
 // [A] mission driver: the speed a chased car may carry now, so it can still take the sharpest bend of its route ahead. The fastest
 // limit on a straight, falling to the slowest one for a quarter turn; the allowed speed grows with the distance to the bend.
-int CivCornerSpeed(CAR_DATA* cp)
+int CivCornerSpeed(CAR_DATA* cp, int top)
 {
 	CIV_ROUTE_ENTRY* n = cp->ai.c.pnode;
-	int top = WorldSpeedLimit(2), low = WorldSpeedLimit(0), cap = top;
+	int low = WorldSpeedLimit(0), cap = top;
 	int heading[CORNER_LOOKAHEAD + 1], dist = 0, i;
 
 	if (n == NULL || !IS_NODE_VALID(cp, n))
@@ -3605,7 +3854,8 @@ int CivAccel(CAR_DATA * cp)
 
 				if (v > 0 && closing > 0 && !OldFollow())
 				{
-					long long wanted = lbody / 4 + (long long)v * CIV_HEADWAY_STEPS + (long long)v * closing * 10 * 2048 / (18 * MAP_CELL_SIZE);
+					int headway = civHasty[cp->id] ? CIV_HEADWAY_STEPS * 7 / 10 : CIV_HEADWAY_STEPS;
+					long long wanted = lbody / 4 + (long long)v * headway + (long long)v * closing * 10 * 2048 / (18 * MAP_CELL_SIZE);
 					float ratio = (float)wanted / MAX(collDat, 1);
 
 					if (ratio > 1.0f)
@@ -4489,6 +4739,12 @@ int CivControl(CAR_DATA* cp)
 			cp->ai.c.ctrlState != CIV_AI_CTRL_PARKED && cp->ai.c.ctrlState != CIV_AI_CTRL_EMPTY &&
 			PositionInViewCone(cp->hd.where.t[0], cp->hd.where.t[2], 100000))
 			gCivStandSteps++;
+
+		if (FIXEDH(cp->hd.wheel_speed) >= 3 && cp->inform == NULL)
+		{
+			gCivSpeedSum[civOnHighway[cp->id]] += FIXEDH(cp->hd.wheel_speed);
+			gCivSpeedSteps[civOnHighway[cp->id]]++;
+		}
 	}
 #endif
 
