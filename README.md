@@ -8,9 +8,9 @@ Redriver ReExtended is a fork of [REDRIVER2](https://github.com/OpenDriver2/REDR
 
 ![Miami](docs/images/miami.jpg)
 
-## Download (v0.15 beta)
+## Download (v0.2 beta)
 
-Do not want to build it? Download **Redriver_ReExtended_v0.15-beta.zip** from the [Releases page](https://github.com/E75/Redriver_ReExtended/releases), unzip it and follow "Set up (5 steps)" below.
+Do not want to build it? Download **Redriver_ReExtended_v0.2-beta.zip** from the [Releases page](https://github.com/E75/Redriver_ReExtended/releases), unzip it and follow "Set up (5 steps)" below.
 
 > **Beta, and updates are likely but not guaranteed.** I will most probably keep improving this, but I have a busy life, so new versions can take a while or come in bursts. Bug reports are welcome as GitHub issues; please say which city and what you were doing, and attach `REDRIVER2.log` when you can.
 
