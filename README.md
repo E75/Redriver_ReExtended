@@ -18,7 +18,7 @@ Do not want to build it? Download **Redriver_ReExtended_v0.2-beta.zip** from the
 
 | Feature | Screenshot |
 |---|---|
-| **Driver 1 cities** in Take a Ride: Miami, San Francisco, Los Angeles (night), New York, Newcastle and the (empty) Training ground, with Driver 2 traffic, cops, pedestrians and on-foot play. 24 Driver 1 story missions under Undercover > D1 Missions. | ![San Francisco](docs/images/frisco.jpg) |
+| **Driver 1 cities** in Take a Ride: Miami, San Francisco, Los Angeles (night), New York, Newcastle and the (empty) Training ground, with Driver 2 traffic, cops, pedestrians and on-foot play. 26 Driver 1 story missions under Undercover > D1 Missions. | ![San Francisco](docs/images/frisco.jpg) |
 | **Draw distance** up to "10x" with distance fog and an HD sky; far objects fade in instead of popping up. | ![Aerial view](docs/images/miami_aerial.jpg) |
 | **Weather**: rain with wet-road reflections, snow, fog. All lights and car lamps work in the weather. | ![Rain](docs/images/chicago_rain.jpg) ![Snow](docs/images/chicago_snow.jpg) |
 | **Day and night cycle**: a continuous 24 hour clock, the sun moves, shadows follow, the sky blends. | ![Dusk](docs/images/chicago_dusk.jpg) |
@@ -27,7 +27,7 @@ Do not want to build it? Download **Redriver_ReExtended_v0.2-beta.zip** from the
 | **Pilotable helicopter** (Chicago and the other Driver 2 cities) with a wider chase camera (180%). | ![Helicopter over Chicago](docs/images/chopper_chicago.jpg) |
 | **Night driving**: volumetric headlights, glowing lamps, car gloss in the sun, broken lamps stay dark. | ![Los Angeles at night](docs/images/la_night.jpg) |
 | **Newcastle and Training ground** (the two smallest Driver 1 levels). | ![Newcastle](docs/images/newcastle.jpg) ![Training](docs/images/training.jpg) |
-| **Car park and Desert missions** (Undercover > D1 Missions > Car park, Desert): the Driver 1 car park test (burnout, handbrake turn, slalom, 180, 360, reverse 180, speed, brake and a lap within 60 seconds, four hits and you are out), then the desert races, practice laps and free drives with the spoke wheel car. The car park test reads its rules from `IVIEW.BIN` of your own Driver 1 disc. | ![Car park test](docs/images/d1_carpark.jpg) |
+| **Car park and Desert missions** (Undercover > D1 Missions > Car park, Desert): the Driver 1 car park test (burnout, handbrake turn, slalom, 180, 360, reverse 180, speed, brake and a lap within 60 seconds, four hits and you are out), then the desert races, practice laps and free drives with the spoke wheel car. The car park test reads its rules from `IVIEW.BIN` and its voice from `SOUND\VOICES.BLK` of your own Driver 1 disc. | ![Car park test](docs/images/d1_carpark.jpg) |
 | **Impact dents**: a hit dents the car where it was hit. A hit on the left front dents the left front and leaves the right front whole, a pole in the middle dents the middle, front and rear crumple back to the wheel arches after a few hits, side hits push the doors in and press the roof down. Traffic cars dent the same way and are whole again when they spawn. | ![Impact dents](docs/images/impact_dents.webp) |
 | **Lost wheels**: a wheel that took many hard hits, or any hard hit at a nearly wrecked car (99% damage), tears off (Driver 2 and Driver 1 cars, traffic too). The car drops on that corner, drags and pulls to that side; it still drives. Option Impact Dents in the Extended Settings: Off, Sensitive, Less Sensitive (default). | ![Lost wheels](docs/images/lost_wheels.webp) |
 | **Car spawner** (debug menu, pause - Debug Options - Car Spawner): a showroom of every Driver 2 and Driver 1 car. Left and right change the car, Enter drives it. | ![Car spawner menu](docs/images/car_spawner_menu.png) ![Car spawner](docs/images/car_spawner.webp) |
@@ -37,11 +37,23 @@ More: ground and water backdrops so the Driver 1 cities have no holes, kerb "inv
 
 <img src="docs/images/d1_cars.jpg" alt="All Driver 1 cars were checked for lamps and wheels" width="640">
 
+## D1 Missions menu
+
+Undercover > D1 Missions lists the converted Driver 1 missions per city (each button shows the city's missions in this order):
+
+| Button | Missions |
+|---|---|
+| **Miami** | 1. The Bank Job, 2. Hide The Evidence, 3. The Clean Up, 4. Tanner Meets Rufus, 5. Superfly Drive, 6. A Shipment's Coming In, 7. Take Out Di'angio's Car |
+| **San Francisco** | 1. The Casino Job, 2. The Briefcase, 3. Visit To The Mall, 4. The Chinatown Pick Up, 5. The Mercy Mission, 6. Tanner And Slater |
+| **Los Angeles** | 1. Steal A Cop Car, 2. Lucky To The Doc's, 3. The Chase, 4. Maya, 5. The Maddox Hit, 6. The Beverly Hills Getaway, 7. The Test Run |
+| **New York** | 1. Grand Central Station Switch, 2. The Accident, 3. Take A Cab, 4. The Negatives, 5. Rite Of Passage, 6. The Ali Situation |
+| **Car park, Desert** | 1. Car park, 2. Car park Drive, 3. Desert Race 1, 4. Desert Race 2, 5. Desert Race 3, 6. Desert Race 4, 7. Desert Practice 1, 8. Desert Practice 2, 9. Desert Practice 3, 10. Desert Practice 4, 11. Desert Drive 1, 12. Desert Drive 2, 13. Desert Drive 3 |
+
 ## Set up (5 steps)
 
 1. **Download** the zip from the [Releases page](https://github.com/E75/Redriver_ReExtended/releases) and unzip it.
 2. **Driver 2 (required):** copy everything of your Driver 2 disc 1 (`LEVELS`, `DATA`, `MISSIONS`, `SOUND`, ...) into the `DRIVER2` folder next to the exe, and the extra folders of disc 2 (for example `NLEVELS`). If Windows asks about existing files (`DATA`, `GFX`, `LANG`), keep the files of the zip. `DRIVER2\LEVELS\CHICAGO.LEV` must exist.
-3. **Driver 1 (optional):** copy the `LEVELS`, `DATA` and `MISSIONS` folders of your Driver 1 disc into a `DRIVER1` folder next to `DRIVER2`, plus the file `IVIEW.BIN` for the car park test.
+3. **Driver 1 (optional):** copy the `LEVELS`, `DATA` and `MISSIONS` folders of your Driver 1 disc into a `DRIVER1` folder next to `DRIVER2`, plus the files `IVIEW.BIN` and `SOUND\VOICES.BLK` for the car park test (rules and voice).
 4. **Convert Driver 1 once:** in the game Options > Gameplay > Secret > Extended Settings > **Driver 1 DLC** > **Check Driver 1 Data** (about a minute), then switch it **On**. Or run `prepare_driver1.bat`. Details: [docs/DRIVER1_SETUP.md](docs/DRIVER1_SETUP.md).
 5. **Start** `REDRIVER2_dev.exe`. Driver 1 cities are under Take a Ride > Driver 1 Cities, the story missions under Undercover > D1 Missions.
 

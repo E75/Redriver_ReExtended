@@ -7,6 +7,8 @@
 #include "overlay.h"
 #include "system.h"
 #include "pad.h"
+#include "gamesnd.h"
+#include "sound.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,6 +47,16 @@ enum
 
 static const int kTextOffsets[TEXT_COUNT] = { 0x28, 0x44, 0x64, 0x90, 0xB0, 0xC4 };
 
+// voice file lump of the test and its samples (docs/dev-notes/d1-desert-garage.md)
+#define D1GARAGE_SPEECH_LUMP	2
+
+enum
+{
+	SPEECH_WRECKED = 5, SPEECH_OUT_OF_TIME = 6, SPEECH_PASSED = 7
+};
+
+static int sSpeechLoaded;
+
 typedef struct
 {
 	int start, size;
@@ -63,7 +75,7 @@ static struct
 
 static struct
 {
-	int frame, over, hits, hitPause;
+	int frame, over, passed, hits, hitPause;
 	char done[D1GARAGE_TASKS];
 	int carSlot[D1GARAGE_CARS], carDamage[D1GARAGE_CARS], playerDamage;
 	int zone, history[D1GARAGE_HISTORY];
@@ -156,6 +168,11 @@ void D1Garage_Reset(void)
 
 	for (i = 0; i < D1GARAGE_HISTORY; i++)
 		sTest.history[i] = 0xff;
+}
+
+void D1Garage_LoadSpeech(void)
+{
+	sSpeechLoaded = LoadBankFromBlock("..\\DRIVER1\\SOUND\\VOICES.BLK", SOUND_BANK_MISSION, D1GARAGE_SPEECH_LUMP);
 }
 
 // zone 1..5 (column 0, far to near) or 6..10 (column 1, near to far), 0 outside
@@ -349,12 +366,25 @@ static void ShowClock(int frames)
 	timer->frac = timer->count % 3000 / 30;
 }
 
-static void EndTest(int text, int passed)
+static void EndTest(int text, int speech, int passed)
 {
 	sTest.over = 1;
+	sTest.passed = passed;
 	SetMissionMessage(sFile.text[text], 3, 3);
 
-	if (passed)
+	if (sSpeechLoaded)
+		PlaySpeech(&gSpeechQueue, 100 + speech);
+}
+
+// like the original the mission only ends once the closing line has been spoken
+static void FinishAfterSpeech(void)
+{
+	if (sTest.over != 1 || gSpeechQueue.count > 0 || gSpeechQueue.is_playing)
+		return;
+
+	sTest.over = 2;
+
+	if (sTest.passed)
 		SetMissionOver(PAUSEMODE_COMPLETE);
 	else
 		SetMissionFailed(FAILED_MESSAGESET);
@@ -366,6 +396,9 @@ void D1Garage_Step(CAR_DATA* cp)
 
 	if (sFile.state == 0)
 		sFile.state = ReadFile() ? 1 : -1;
+
+	if (sTest.over)
+		FinishAfterSpeech();
 
 	if (sFile.state < 0 || sTest.over || cp == NULL)
 		return;
@@ -389,11 +422,11 @@ void D1Garage_Step(CAR_DATA* cp)
 		;
 
 	if (i == D1GARAGE_TASKS)
-		EndTest(TEXT_PASSED, 1);
+		EndTest(TEXT_PASSED, SPEECH_PASSED, 1);
 	else if (sTest.hits >= D1GARAGE_WRECKED)
-		EndTest(TEXT_WRECKED, 0);
+		EndTest(TEXT_WRECKED, SPEECH_WRECKED, 0);
 	else if (left <= 0 && ABS(ForwardSpeed(cp)) < 6)
-		EndTest(TEXT_OUT_OF_TIME, 0);
+		EndTest(TEXT_OUT_OF_TIME, SPEECH_OUT_OF_TIME, 0);
 }
 
 void D1Garage_Draw(void)

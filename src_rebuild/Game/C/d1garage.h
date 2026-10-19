@@ -7,6 +7,9 @@
 // new mission: the test starts again
 extern void D1Garage_Reset(void);
 
+// level sounds: the examiner's voice from the player's DRIVER1\SOUND\VOICES.BLK into the mission bank
+extern void D1Garage_LoadSpeech(void);
+
 // one frame of the test (engine function 0x4000022 of the converted script); ends the mission itself
 extern void D1Garage_Step(CAR_DATA* cp);
 
