@@ -583,6 +583,40 @@ bool ConvertTextures(ConvertContext& c)
 	return true;
 }
 
+// D1 wheels have spoke rims: the D2 wheel keeps its layout and takes the rim texture of the D1 hub faces (polys 2 and 3 in
+// both); wheels are drawn everywhere, so the rim page must be permanent.
+void CopyD1Rim(std::vector<char>& model, std::vector<char>& d1Model, const TexInfo& d1Tex)
+{
+	const int kPolyFT4 = 21, kUvOffset = 8, kUvBytes = 8;
+	unsigned char rim[2][2 + kUvBytes];
+	int found = 0, n = 0;
+
+	ForEachPoly(d1Model, [&](unsigned char* poly, int type)
+	{
+		if ((n == 2 || n == 3) && type == kPolyFT4 && FindPermIndex(d1Tex, poly[1]) >= 0)
+		{
+			memcpy(rim[n - 2], poly + 1, 2);
+			memcpy(rim[n - 2] + 2, poly + kUvOffset, kUvBytes);
+			found++;
+		}
+		n++;
+	});
+
+	if (found != 2)
+		return;
+
+	n = 0;
+	ForEachPoly(model, [&](unsigned char* poly, int type)
+	{
+		if ((n == 2 || n == 3) && type == kPolyFT4)
+		{
+			memcpy(poly + 1, rim[n - 2], 2);
+			memcpy(poly + kUvOffset, rim[n - 2] + 2, kUvBytes);
+		}
+		n++;
+	});
+}
+
 bool ConvertModels(ConvertContext& c)
 {
 	ModelSet city, donor;
@@ -641,7 +675,7 @@ bool ConvertModels(ConvertContext& c)
 	{
 		// D1 has its own PEDHEAD1 (other origin, floats above the D2 neck, other texture layout): the D2 head replaces it
 		int existing = FindModel(city, name);
-		// the wheel models of D1 are laid out differently from what MangleWheelModels (cars.c) expects: the D2 wheels replace them
+		// the wheel models of D1 are laid out differently from what MangleWheelModels (cars.c) expects: the D2 wheels replace them, with the D1 rims
 		bool replaceHead = existing >= 0 && (!strcmp(name, "PEDHEAD1") || (kReplaceWheels && (!strcmp(name, "CLEANWHEEL") || !strcmp(name, "FASTWHEEL") || !strcmp(name, "DAMWHEEL"))));
 
 		if (existing >= 0 && !replaceHead)
@@ -665,6 +699,9 @@ bool ConvertModels(ConvertContext& c)
 
 		if (replaceHead)
 		{
+			if (strcmp(name, "PEDHEAD1") != 0)
+				CopyD1Rim(model, city.models[existing], c.d1Tex);
+
 			city.models[existing] = model;
 			continue;
 		}

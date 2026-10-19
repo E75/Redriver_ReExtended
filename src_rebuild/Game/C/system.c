@@ -185,6 +185,7 @@ DB* current;
 
 static CITYTYPE lasttype = (CITYTYPE)-1;
 static int lastcity = -1;
+static int lastGarage = -1;		// the D1 car park shares the Training slot with the desert
 
 int citystart[NUM_CITIES];
 XYPAIR citylumps[NUM_CITIES][4];
@@ -1175,12 +1176,13 @@ void SetCityType(CITYTYPE type)
 		lasttype = (CITYTYPE)-1;
 #endif
 
-	if (type == lasttype && GameLevel == lastcity)
+	if (type == lasttype && GameLevel == lastcity && gD1DlcGarage == lastGarage)
 		return;
 
 	ResetCityType();
 
 	lastcity = GameLevel;
+	lastGarage = gD1DlcGarage;
 	lasttype = type;
 	gCitySpoolNight = (type == CITYTYPE_NIGHT || type == CITYTYPE_MULTI_NIGHT);
 

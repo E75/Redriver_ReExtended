@@ -15,7 +15,7 @@ const D1DlcCity g_D1DlcCities[D1DLC_NUM_CITIES] = {
 	{ D1DLC_FIRST_CITY + 2, "LA",		"LA.LEV",		-159000, -169500, 1024, 4 },
 	{ D1DLC_FIRST_CITY + 3, "NEWYORK",	"NEWYORK.LEV",	-87000,  56250,   0,    5 },
 	{ D1DLC_FIRST_CITY + 4, "NEWCASTLE",	"CREDITS.LEV",	-8250, 48750, 0, 0 },
-	{ D1DLC_FIRST_CITY + 5, "TRAINING",	"TRAIN.LEV",	-6750, -37500, 0, 2 },
+	{ D1DLC_FIRST_CITY + 5, "TRAINING",	"TRAIN.LEV",	-6750, -37500, 0, 1 },
 	// car park of the Garage and Test Level missions (city id 2 of the mission scripts): plays in the Training slot, see gD1DlcGarage
 	{ D1DLC_FIRST_CITY + 5, "GARAGE",	"IVIEW.LEV",	0, 0, 0, 2 },
 };

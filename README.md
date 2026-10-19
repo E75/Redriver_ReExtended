@@ -27,6 +27,7 @@ Do not want to build it? Download **Redriver_ReExtended_v0.15-beta.zip** from th
 | **Pilotable helicopter** (Chicago and the other Driver 2 cities) with a wider chase camera (180%). | ![Helicopter over Chicago](docs/images/chopper_chicago.jpg) |
 | **Night driving**: volumetric headlights, glowing lamps, car gloss in the sun, broken lamps stay dark. | ![Los Angeles at night](docs/images/la_night.jpg) |
 | **Newcastle and Training ground** (the two smallest Driver 1 levels). | ![Newcastle](docs/images/newcastle.jpg) ![Training](docs/images/training.jpg) |
+| **Car park and Desert missions** (Undercover > D1 Missions > Car park, Desert): the Driver 1 car park test (burnout, handbrake turn, slalom, 180, 360, reverse 180, speed, brake and a lap within 60 seconds, four hits and you are out), then the desert races, practice laps and free drives with the spoke wheel car. The car park test reads its rules from `IVIEW.BIN` of your own Driver 1 disc. | ![Car park test](docs/images/d1_carpark.jpg) |
 | **Impact dents**: a hit dents the car where it was hit. A hit on the left front dents the left front and leaves the right front whole, a pole in the middle dents the middle, front and rear crumple back to the wheel arches after a few hits, side hits push the doors in and press the roof down. Traffic cars dent the same way and are whole again when they spawn. | ![Impact dents](docs/images/impact_dents.webp) |
 | **Lost wheels**: a wheel that took many hard hits, or any hard hit at a nearly wrecked car (99% damage), tears off (Driver 2 and Driver 1 cars, traffic too). The car drops on that corner, drags and pulls to that side; it still drives. Option Impact Dents in the Extended Settings: Off, Sensitive, Less Sensitive (default). | ![Lost wheels](docs/images/lost_wheels.webp) |
 | **Car spawner** (debug menu, pause - Debug Options - Car Spawner): a showroom of every Driver 2 and Driver 1 car. Left and right change the car, Enter drives it. | ![Car spawner menu](docs/images/car_spawner_menu.png) ![Car spawner](docs/images/car_spawner.webp) |
@@ -40,7 +41,7 @@ More: ground and water backdrops so the Driver 1 cities have no holes, kerb "inv
 
 1. **Download** the zip from the [Releases page](https://github.com/E75/Redriver_ReExtended/releases) and unzip it.
 2. **Driver 2 (required):** copy everything of your Driver 2 disc 1 (`LEVELS`, `DATA`, `MISSIONS`, `SOUND`, ...) into the `DRIVER2` folder next to the exe, and the extra folders of disc 2 (for example `NLEVELS`). If Windows asks about existing files (`DATA`, `GFX`, `LANG`), keep the files of the zip. `DRIVER2\LEVELS\CHICAGO.LEV` must exist.
-3. **Driver 1 (optional):** copy the `LEVELS`, `DATA` and `MISSIONS` folders of your Driver 1 disc into a `DRIVER1` folder next to `DRIVER2`.
+3. **Driver 1 (optional):** copy the `LEVELS`, `DATA` and `MISSIONS` folders of your Driver 1 disc into a `DRIVER1` folder next to `DRIVER2`, plus the file `IVIEW.BIN` for the car park test.
 4. **Convert Driver 1 once:** in the game Options > Gameplay > Secret > Extended Settings > **Driver 1 DLC** > **Check Driver 1 Data** (about a minute), then switch it **On**. Or run `prepare_driver1.bat`. Details: [docs/DRIVER1_SETUP.md](docs/DRIVER1_SETUP.md).
 5. **Start** `REDRIVER2_dev.exe`. Driver 1 cities are under Take a Ride > Driver 1 Cities, the story missions under Undercover > D1 Missions.
 
