@@ -199,9 +199,10 @@ int CityOf(int d1City)
 	{
 	case 0: return D1DLC_FIRST_CITY + 0;
 	case 1: return D1DLC_FIRST_CITY + 1;
-	case 2: return D1DLC_FIRST_CITY + 5;		// Training (TRAIN.LEV)
-		case 3: return D1DLC_FIRST_CITY + 2;
+	case 2: return D1DLC_FIRST_CITY + 5;		// car park (IVIEW.LEV), loaded in the Training slot
+	case 3: return D1DLC_FIRST_CITY + 2;
 	case 5: return D1DLC_FIRST_CITY + 3;
+	case 6: return D1DLC_FIRST_CITY + 5;		// desert of the Training level (TRAIN.LEV)
 	}
 
 	return -1;
@@ -245,9 +246,11 @@ const char kDefaultLoseTail[] = "Lose the tail.";
 // Garage and Test Level missions (scripts 117 and 118 of MISSION.BLK, city id 2 = the car park level IVIEW.LEV): start position,
 // cops off, a long wait and "Well done!". Their objectives live in code the converter does not know (SETVAR 39 / 40, chase
 // switches), so they become free drives: no target, no timer, no cops, no traffic. The car park is loaded in the Training
-// slot (header city = Training, engine: IS_D1_GARAGE_MISSION).
-const int kTrainingCityId = 2;
-const int kFreeDriveOps[] = { 1, 2, 10, 19, 22, 24, 34, 38, 40, 49, 52, 61, 67, 84 };
+// slot (header city = Training, engine: IS_D1_GARAGE_MISSION). The desert scripts without a target (114-116) are free drives too;
+// op 110 picks their area of the desert.
+const int kGarageCityId = 2;
+const int kDesertCityId = 6;
+const int kFreeDriveOps[] = { 1, 2, 10, 19, 22, 24, 34, 38, 40, 49, 52, 61, 67, 84, 110 };
 const int kFreeDriveVars[] = { 39, 40, 45, 66 };
 
 // Ram missions: the D1 target car drives a recorded run (REPLAY.BLK) that needs the D1 physics. Adaptation: a chase car
@@ -781,7 +784,7 @@ bool Converter::ConvertRecords(const std::vector<Record>& recs, std::vector<char
 	m_head[H_MSG_POLICE] = -1;
 	m_head[H_MSG_DOORS] = -1;
 
-	if (first[OP_CITY]->args[0] == kTrainingCityId)
+	if (first[OP_CITY]->args[0] == kGarageCityId || (first[OP_CITY]->args[0] == kDesertCityId && !first[OP_TARGET0]))
 		return FinishFreeDrive(recs, d2ms);
 
 	for (const Record& r : recs)
@@ -1126,6 +1129,17 @@ std::string MissionPath(int number)
 	return path;
 }
 
+// menu title of a free drive script (D1MISSION_FREE_FIRST on)
+std::string FreeDriveTitle(int scriptIndex)
+{
+	if (scriptIndex == 117)
+		return "Garage Mission";
+	if (scriptIndex == 118)
+		return "Test Level Mission";
+
+	return "Desert Drive " + std::to_string(scriptIndex - D1MISSION_FREE_FIRST + 1);
+}
+
 // printable ASCII only, the frontend font has nothing else
 std::string MenuTitle(const std::string& raw, int story)
 {
@@ -1218,7 +1232,7 @@ bool ConvertAll(const std::vector<char>& blk)
 	int skipped = 0;
 	g_missions.clear();
 
-	// the 44 story missions, then the Garage and Test Level missions (free drives in the car park level)
+	// the 44 story missions, then the free drives (desert, Garage, Test Level)
 	for (int k = 0; k < D1MISSION_STORY_COUNT + D1MISSION_FREE_COUNT; k++)
 	{
 		const int scriptIndex = k < D1MISSION_STORY_COUNT ? k : D1MISSION_FREE_FIRST + k - D1MISSION_STORY_COUNT;
@@ -1249,7 +1263,7 @@ bool ConvertAll(const std::vector<char>& blk)
 		MissionEntry e;
 		e.number = D1MISSION_BASE + scriptIndex;
 		e.city = city;
-		e.title = k < D1MISSION_STORY_COUNT ? MenuTitle(title, k) : k == D1MISSION_STORY_COUNT ? "Garage Mission" : "Test Level Mission";
+		e.title = k < D1MISSION_STORY_COUNT ? MenuTitle(title, k) : FreeDriveTitle(scriptIndex);
 
 		if (!WriteWhole(MissionPath(e.number), d2ms.data(), d2ms.size()))
 		{
