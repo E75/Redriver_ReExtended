@@ -128,14 +128,62 @@ static int CivLanesSameWay(DRIVER2_ROAD_INFO* rd, int lane)
 	return sameWay;
 }
 
+#define CHASE_EVADE_DIST	4000	// the player's car this close makes a chased car weave and turn off
+
+// a chased car (civCornerBrake, set by the mission code) with the player's car near: *dx, *dz = player minus car
+static int CivChaserNear(CAR_DATA* cp, int* dx, int* dz)
+{
+	CAR_DATA* pc;
+
+	if (!civCornerBrake[cp->id] || MainPlayer.playerType != PLAYER_TYPE_CAR || MainPlayer.playerCarId < 0)
+		return 0;
+
+	pc = &car_data[MainPlayer.playerCarId];
+	*dx = pc->hd.where.t[0] - cp->hd.where.t[0];
+	*dz = pc->hd.where.t[2] - cp->hd.where.t[2];
+
+	return ABS(*dx) < CHASE_EVADE_DIST && ABS(*dz) < CHASE_EVADE_DIST;
+}
+
 // main roads draw more traffic and a car keeps a rough heading for a while, so traffic flows instead of zig-zagging
 static int CivExitWeight(CAR_DATA* cp, DRIVER2_ROAD_INFO* rd, int lane, int heading)
 {
 	int roadClass = ROAD_SPEED_LIMIT(rd) + CivLanesSameWay(rd, lane) + 2;
+	int weight, dx, dz;
 
 	// mild bias (main road about 2x, trip heading 2x): a strong pull piled cars into queues on the main roads
-	return roadClass * (12288 + RCOS(DIFF_ANGLES(civTripHeading[cp->id], heading & 4095))) / 1024 + 1;
+	weight = roadClass * (12288 + RCOS(DIFF_ANGLES(civTripHeading[cp->id], heading & 4095))) / 1024 + 1;
+
+	// a chased car with the player close behind turns off late rather than going straight, never towards the player
+	if (CivChaserNear(cp, &dx, &dz))
+	{
+		if (ABS(DIFF_ANGLES(heading & 4095, cp->hd.direction & 4095)) > 512)
+			weight *= 3;
+
+		if (RCOS(DIFF_ANGLES(heading & 4095, ratan2(dx, dz))) > 2048)
+			weight = 1;
+	}
+
+	return weight;
 }
+
+// road info on a car's route; a chased car may also take a road without traffic lanes (an alley): returns 2 then
+static int CivRoadInfo(CAR_DATA* cp, DRIVER2_ROAD_INFO* ri, int surfId)
+{
+	if (!GetSurfaceRoadInfo(ri, surfId))
+		return 0;
+
+	if (SmartTraffic() && civCornerBrake[cp->id] && (u_char)ri->AILanes == 0 && ROAD_LANES_COUNT(ri) > 0)
+	{
+		ri->AILanes = (char)0xFF;
+		return 2;
+	}
+
+	return 1;
+}
+#define CIV_ROAD_INFO(cp, ri, surfId)	CivRoadInfo(cp, ri, surfId)
+#else
+#define CIV_ROAD_INFO(cp, ri, surfId)	GetSurfaceRoadInfo(ri, surfId)
 #endif
 
 // highway feel: a quarter faster on a fast road with two or more lanes the car's way; drivers differ in speed
@@ -523,7 +571,7 @@ int GetNextRoadInfo(CAR_DATA* cp, int randomExit, int* turnAngle, int* startDist
 
 	currentRoadId = cp->ai.c.currentRoad;
 
-	if (GetSurfaceRoadInfo(&currentRoadInfo, currentRoadId))
+	if (CIV_ROAD_INFO(cp, &currentRoadInfo, currentRoadId))
 	{
 		int laneNo;
 
@@ -598,7 +646,7 @@ int GetNextRoadInfo(CAR_DATA* cp, int randomExit, int* turnAngle, int* startDist
 		// only need 3 cycles because we don't want make U-turns
 		for (exitCnt = 0; exitCnt < 3; exitCnt++)
 		{
-			int exitSurfId, exitIdx, valid;
+			int exitSurfId, exitIdx, valid, alley = 0;
 
 			exitIdx = (exitFrom + exitCnt + 1) % 4;
 			
@@ -627,10 +675,13 @@ int GetNextRoadInfo(CAR_DATA* cp, int randomExit, int* turnAngle, int* startDist
 				// current node direction and new direction
 				turnDir = oldNode->dir + turnAng;
 
-				if (GetSurfaceRoadInfo(&roadInfo, exitSurfId))
+				if ((valid = CIV_ROAD_INFO(cp, &roadInfo, exitSurfId)) != 0)
 				{
 					int dx, dz;
 					int numLanes;
+
+					alley = valid == 2;
+					valid = 0;
 
 					numLanes = ROAD_WIDTH_IN_LANES(&roadInfo);
 
@@ -688,6 +739,14 @@ int GetNextRoadInfo(CAR_DATA* cp, int randomExit, int* turnAngle, int* startDist
 				numExits++;
 #ifndef PSX
 				exitWeight[exitCnt] = CivExitWeight(cp, &roadInfo, newLane, turnDir);
+
+				// an alley only to shake off the player close behind
+				{
+					int ex, ez;
+
+					if (alley && !CivChaserNear(cp, &ex, &ez))
+						exitWeight[exitCnt] = 1;
+				}
 #endif
 			}
 			else
@@ -839,7 +898,16 @@ int GetNextRoadInfo(CAR_DATA* cp, int randomExit, int* turnAngle, int* startDist
 			}
 		}
 
-		if(!GetSurfaceRoadInfo(&roadInfo, newRoad))
+#ifndef PSX
+		// a chased car runs red lights and gives no way; it only slows for the bend itself (CivCornerSpeed)
+		if (SmartTraffic() && civCornerBrake[cp->id] && cp->ai.c.ctrlState != CIV_AI_CTRL_STOP_AT_NODE)
+		{
+			cp->ai.c.ctrlState = CIV_AI_CTRL_DRIVE;
+			cp->ai.c.ctrlNode = NULL;
+		}
+#endif
+
+		if(!CIV_ROAD_INFO(cp, &roadInfo, newRoad))
 		{
 			CIV_STATE_SET_CONFUSED(cp);
 			return 0;
@@ -962,7 +1030,7 @@ int GetNextRoadInfo(CAR_DATA* cp, int randomExit, int* turnAngle, int* startDist
 					pz = oldNode->z;
 				}
 
-				if (GetSurfaceRoadInfo(&roadInfo, tmpNewRoad[roadCnt]))
+				if (CIV_ROAD_INFO(cp, &roadInfo, tmpNewRoad[roadCnt]))
 				{
 					numLanes = ROAD_WIDTH_IN_LANES(&roadInfo);
 
@@ -1489,6 +1557,7 @@ static int CivLaneGapFree(CAR_DATA* cp, int right, int* aheadSpeed)
 	int lbody = cp->ap.carCos->colBox.vz;
 	int target = right ? LANE_WIDTH : -LANE_WIDTH;
 	int nearest = 0x7fffffff;
+	int aheadSteps = civCornerBrake[cp->id] ? LANE_GAP_AHEAD_STEPS / 2 : LANE_GAP_AHEAD_STEPS;	// a chased car cuts in closer
 
 	*aheadSpeed = 1000;
 
@@ -1515,7 +1584,7 @@ static int CivLaneGapFree(CAR_DATA* cp, int right, int* aheadSpeed)
 
 		if (along >= 0)
 		{
-			if (along < lbody * 2 + v * LANE_GAP_AHEAD_STEPS)
+			if (along < lbody * 2 + v * aheadSteps)
 				return 0;
 
 			if (along < nearest)
@@ -1536,14 +1605,31 @@ static void CivSmartLaneChange(CAR_DATA* cp, DRIVER2_ROAD_INFO* rd)
 {
 	int lane = cp->ai.c.currentLane;
 	int v = FIXEDH(cp->hd.wheel_speed);
-	int right, aheadSpeed;
+	int chase = civCornerBrake[cp->id];
+	int right, aheadSpeed, dx, dz;
 
 	if (cp->ai.c.ctrlState != CIV_AI_CTRL_DRIVE || cp->ai.c.changeLaneIndicateCount != 0 || cp->ai.c.ctrlNode != NULL ||
-		cp->ai.c.turnNode != -1 || civSwerveLeft[cp->id] != 0 || cp->inform != NULL || v < 10)
+		cp->ai.c.turnNode != -1 || civSwerveLeft[cp->id] != 0 || (cp->inform != NULL && !chase) || v < 10)
 		return;
 
+	// a chased car with the player right behind in its lane weaves into a free side lane
+	if (CivChaserNear(cp, &dx, &dz) && FIXEDH(dx * cp->hd.where.m[0][2] + dz * cp->hd.where.m[2][2]) < 0 &&
+		ABS(FIXEDH(dx * cp->hd.where.m[0][0] + dz * cp->hd.where.m[2][0])) < LANE_WIDTH * 3 / 4)
+	{
+		for (right = 0; right < 2; right++)
+		{
+			int side = CivSideLane(rd, lane, right);
+
+			if (side >= 0 && CivLaneGapFree(cp, right, &aheadSpeed))
+			{
+				CivChangeLaneTo(cp, side, right);
+				return;
+			}
+		}
+	}
+
 	if (brakeLength[cp->id] != 0 && brakeLeadCar[cp->id] != 0 &&
-		brakeLeadSpeed[cp->id] < cp->ai.c.maxSpeed * OVERTAKE_SLOWER_PCT / 100)
+		(chase || brakeLeadSpeed[cp->id] < cp->ai.c.maxSpeed * OVERTAKE_SLOWER_PCT / 100))
 	{
 		// overtake on the left, else on the right
 		for (right = 0; right < 2; right++)
@@ -1560,8 +1646,8 @@ static void CivSmartLaneChange(CAR_DATA* cp, DRIVER2_ROAD_INFO* rd)
 		return;
 	}
 
-	// keep right: nothing slow ahead, the right lane is free and nobody slow in it
-	if (brakeLength[cp->id] == 0)
+	// keep right: nothing slow ahead, the right lane is free and nobody slow in it; a chased car keeps any lane
+	if (brakeLength[cp->id] == 0 && !chase)
 	{
 		int side = CivSideLane(rd, lane, 1);
 
@@ -2951,12 +3037,12 @@ static int LaneDriveDirection(DRIVER2_ROAD_INFO* roadInfo, int lane, int distAlo
 // drives in the wanted direction (heading, the way the player faces: the car flees ahead of him).
 // The Driver 2 lead car AI (free roamer) does not fit the Driver 1 roads (it leaves its lane and stops at the first
 // junction), the civilian AI knows them. Returns the car slot, -1 when there is no free slot or no lane near the spot.
-// limit: 8 directions in rings of 1500 units up to 15000, twice, upgrade: ask the road map for the nearest lane directly
+// limit: 8 (16) directions in 10 rings of ringStep units, twice, upgrade: ask the road map for the nearest lane directly
 // [A] nearest traffic lane to a spot that drives about the wanted way (heading), with the first pass only for lanes within 90 degrees.
-// self = a car that does not count as being in the way (or NULL)
-static int FindDrivingLaneSpot(int x, int z, int heading, int lbody, const CAR_DATA* self, EXTRA_CIV_DATA* outDat, CIV_ROUTE_ENTRY* outNode, int* outDir, int* outLane)
+// self = a car not in the way (or NULL); keepClear = spawn rules (room, no short roads or road ends), off = any lane spot
+static int FindDrivingLaneSpot(int x, int z, int heading, int lbody, const CAR_DATA* self, int ringStep, int keepClear,
+	EXTRA_CIV_DATA* outDat, CIV_ROUTE_ENTRY* outNode, int* outDir, int* outLane)
 {
-	const int ringStep = 1500;
 	const int maxRings = 10;
 
 	DRIVER2_ROAD_INFO roadInfo;
@@ -2971,9 +3057,11 @@ static int FindDrivingLaneSpot(int x, int z, int heading, int lbody, const CAR_D
 		const int dist = (ring % (maxRings + 1)) * ringStep;
 		const int mustFitDirection = ring <= maxRings;
 
-		for (k = 0; k < (dist ? 8 : 1); k++)
+		const int dirs = dist ? (keepClear ? 8 : 16) : 1;
+
+		for (k = 0; k < dirs; k++)
 		{
-			int angle = k * (ONE / 8);
+			int angle = k * ONE / dirs;
 			int roadSeg, lane, dir, bestDiff, dx, dz, theta, tooClose;
 
 			spot.vx = x + (RSIN(angle) * dist >> 12);
@@ -2993,9 +3081,9 @@ static int FindDrivingLaneSpot(int x, int z, int heading, int lbody, const CAR_D
 			// position along the road, same rules as the ping in of PingInCivCar
 			if (IS_STRAIGHT_SURFACE(roadSeg))
 			{
-				int minDistAlong = lbody * 3;
+				int minDistAlong = keepClear ? lbody * 3 : 0;
 
-				if (roadInfo.straight->length <= lbody * 6)
+				if (keepClear && roadInfo.straight->length <= lbody * 6)
 					continue;
 
 				dx = spot.vx - roadInfo.straight->Midx;
@@ -3030,7 +3118,7 @@ static int FindDrivingLaneSpot(int x, int z, int heading, int lbody, const CAR_D
 					alongMask = 0xfe0;
 				}
 
-				if (lbody * 6 > ((roadInfo.curve->end - roadInfo.curve->start & 0xfffU) * roadInfo.curve->inside * 11) / 7)
+				if (keepClear && lbody * 6 > ((roadInfo.curve->end - roadInfo.curve->start & 0xfffU) * roadInfo.curve->inside * 11) / 7)
 					continue;
 
 				segmentLen = (roadInfo.curve->end - roadInfo.curve->start) - minDistAlong & 0xfff;
@@ -3074,7 +3162,7 @@ static int FindDrivingLaneSpot(int x, int z, int heading, int lbody, const CAR_D
 
 			// no other car on that spot
 			tooClose = 0;
-			for (i = 0; i < MAX_CARS; i++)
+			for (i = 0; keepClear && i < MAX_CARS; i++)
 			{
 				if (car_data[i].controlType != CONTROL_TYPE_NONE && &car_data[i] != self)
 				{
@@ -3139,7 +3227,7 @@ int CreateDrivingCivCarNear(int x, int z, int heading, int externalModel, int pa
 
 	lbody = car_cosmetics[model].colBox.vz;
 
-	if (!FindDrivingLaneSpot(x, z, heading, lbody, NULL, &civDat, &node, &dir, &lane))
+	if (!FindDrivingLaneSpot(x, z, heading, lbody, NULL, 1500, 1, &civDat, &node, &dir, &lane))
 		return -1;
 
 	civDat.thrustState = CIV_AI_THRUST_ACCELERATE;
@@ -3163,12 +3251,13 @@ int CreateDrivingCivCarNear(int x, int z, int heading, int externalModel, int pa
 }
 
 // [A] where a car that left the road can rejoin the traffic: the nearest lane that drives about the way it faces (Driver 1 chase car, d1chase.c)
-int CivFindLaneNear(CAR_DATA* cp, EXTRA_CIV_DATA* outDat, int* outX, int* outZ)
+int CivFindLaneNear(CAR_DATA* cp, int heading, EXTRA_CIV_DATA* outDat, int* outX, int* outZ, int* outDir)
 {
 	CIV_ROUTE_ENTRY node;
-	int dir, lane;
+	int lane;
 
-	if (!FindDrivingLaneSpot(cp->hd.where.t[0], cp->hd.where.t[2], cp->hd.direction, cp->ap.carCos->colBox.vz, cp, outDat, &node, &dir, &lane))
+	// fine rings and no room check: the lane right next to the car, wherever other cars are
+	if (!FindDrivingLaneSpot(cp->hd.where.t[0], cp->hd.where.t[2], heading, cp->ap.carCos->colBox.vz, cp, 200, 0, outDat, &node, outDir, &lane))
 		return 0;
 
 	*outX = node.x;
@@ -3202,6 +3291,7 @@ int sideMul = 10;
 int collDat = 0;
 int carnum = 0;
 const int newAccel = 2000;
+#define CIV_CHASE_ACCEL	4779
 
 // [D] [T]
 int CivAccelTrafficRules(CAR_DATA * cp, int* distToNode)
@@ -3216,6 +3306,12 @@ int CivAccelTrafficRules(CAR_DATA * cp, int* distToNode)
 	car_cos = cp->ap.carCos;
 	lbody = car_cos->colBox.vz;
 	wbody = car_cos->colBox.vx;
+
+#ifndef PSX
+	// a chased car only stops when its damage bar is full (mission code), never from one hard hit
+	if (civCornerBrake[cp->id])
+		cp->ai.c.carMustDie = 0;
+#endif
 
 	// why only first car must die?
 	// P.S. it's the only one with the music
@@ -3289,13 +3385,18 @@ int CivAccelTrafficRules(CAR_DATA * cp, int* distToNode)
 			if (FIXEDH(cp->hd.wheel_speed) > cp->ai.c.maxSpeed)
 			{
 #ifndef PSX
-				// a chased car that is clearly too fast for the bend ahead brakes instead of coasting into the wall
-				if (civCornerBrake[cp->id] && FIXEDH(cp->hd.wheel_speed) > cp->ai.c.maxSpeed + cp->ai.c.maxSpeed / 10)
-					return -newAccel;
+				// a chased car too fast for the bend ahead brakes hard instead of coasting onto the pavement
+				if (civCornerBrake[cp->id] && FIXEDH(cp->hd.wheel_speed) > cp->ai.c.maxSpeed + cp->ai.c.maxSpeed / 20)
+					return -CIV_CHASE_ACCEL;
 #endif
 				return newAccel >> 2;
 			}
 
+#ifndef PSX
+			// a chased car pulls away with the throttle of the recorded Driver 1 runs
+			if (civCornerBrake[cp->id])
+				return CIV_CHASE_ACCEL;
+#endif
 			return newAccel;
 		}
 		case CIV_AI_THRUST_STOP_AT_NODE:
@@ -3884,8 +3985,9 @@ int CivAccel(CAR_DATA * cp)
 		}
 
 #ifndef PSX
-		// creep past the standing car
-		if (civSwerveLeft[cp->id] > 0 && FIXEDH(cp->hd.wheel_speed) > WorldSpeedLimit(0) / 2 && ret > -cp->hd.wheel_speed / 8)
+		// creep past the standing car; a chased car slips past a slow one at speed
+		if (civSwerveLeft[cp->id] > 0 && FIXEDH(cp->hd.wheel_speed) > (civCornerBrake[cp->id] ? WorldSpeedLimit(2) : WorldSpeedLimit(0) / 2) &&
+			ret > -cp->hd.wheel_speed / 8)
 			ret = -cp->hd.wheel_speed / 8;
 #endif
 	}
@@ -4609,6 +4711,17 @@ static void CivSwerveStep(CAR_DATA* cp)
 		civSwerveLeft[id] = CIV_SWERVE_FADE;
 }
 
+// go round another car, its box turned into the own driving direction
+static int CivTrySwerveRound(CAR_DATA* cp, CAR_DATA* blocker)
+{
+	CAR_COSMETICS* bc = blocker->ap.carCos;
+	int rel = DIFF_ANGLES(cp->hd.direction, blocker->hd.direction);
+	int across = FIXEDH(ABS(RCOS(rel)) * bc->colBox.vx + ABS(RSIN(rel)) * bc->colBox.vz);
+	int along = FIXEDH(ABS(RSIN(rel)) * bc->colBox.vx + ABS(RCOS(rel)) * bc->colBox.vz);
+
+	return CivTrySwerve(cp, blocker, blocker->hd.where.t[0], blocker->hd.where.t[2], across, along, ABS(rel) > 1536, CIV_SWERVE_STEPS);
+}
+
 // escalation for a stuck car: go round a standing car, else back off; the player's car gets 10 s since it may wait at a light
 static void CivJamLadder(CAR_DATA* cp)
 {
@@ -4618,17 +4731,13 @@ static void CivJamLadder(CAR_DATA* cp)
 
 	if (blocker)
 	{
-		CAR_COSMETICS* bc = blocker->ap.carCos;
-		int rel = DIFF_ANGLES(cp->hd.direction, blocker->hd.direction);
-		int oncoming = ABS(rel) > 1536;
+		int oncoming = ABS(DIFF_ANGLES(cp->hd.direction, blocker->hd.direction)) > 1536;
 		int patience = blocker->controlType == CONTROL_TYPE_PLAYER ? CIV_SWERVE_PLAYER_WAIT : CIV_REVERSE_STEPS;
-		int across = FIXEDH(ABS(RCOS(rel)) * bc->colBox.vx + ABS(RSIN(rel)) * bc->colBox.vz);
-		int along = FIXEDH(ABS(RSIN(rel)) * bc->colBox.vx + ABS(RCOS(rel)) * bc->colBox.vz);
 
 		if (steps < patience || steps % CIV_SWERVE_RETRY != 0)
 			return;
 
-		if (CivTrySwerve(cp, blocker, blocker->hd.where.t[0], blocker->hd.where.t[2], across, along, oncoming, CIV_SWERVE_STEPS))
+		if (CivTrySwerveRound(cp, blocker))
 			return;
 
 		if (oncoming && steps >= CIV_REVERSE_STEPS * 2 && CivClearBehind(cp))
@@ -4655,6 +4764,18 @@ static void CivJamLadder(CAR_DATA* cp)
 
 	civReverseLeft[id] = CIV_REVERSE_LENGTH;
 	gCivReverseCount++;
+}
+
+// a chased car never queues: a slow car close ahead is passed at once on whatever side is free (oncoming lane, pavement)
+static void CivChaseSlipPast(CAR_DATA* cp)
+{
+	int id = cp->id;
+
+	if (!civCornerBrake[id] || brakeLeadCar[id] == 0 || civSwerveLeft[id] != 0 || civReverseLeft[id] != 0 ||
+		brakeLength[id] > cp->ap.carCos->colBox.vz * 8 || brakeLeadSpeed[id] * 2 > cp->ai.c.maxSpeed || (CameraCnt + id) % 5 != 0)
+		return;
+
+	CivTrySwerveRound(cp, &car_data[brakeLeadCar[id] - 1]);
 }
 
 // [A] gridlock at crossings: a civilian car that stands still for no good reason (not a red light, not parked, not the car the
@@ -4734,6 +4855,9 @@ int CivControl(CAR_DATA* cp)
 	{
 		CivJamBreaker(cp);
 		CivSwerveStep(cp);
+
+		if (SmartTraffic())
+			CivChaseSlipPast(cp);
 
 		if (ABS(FIXEDH(cp->hd.wheel_speed)) < 3 && cp->inform == NULL && !CivWaitsForLight(cp) &&
 			cp->ai.c.ctrlState != CIV_AI_CTRL_PARKED && cp->ai.c.ctrlState != CIV_AI_CTRL_EMPTY &&

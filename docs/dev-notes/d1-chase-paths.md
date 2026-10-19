@@ -24,6 +24,22 @@ Replay group k of the original (0..5) belongs to story script 6, 11, 24, 27, 35,
 - `chaseInfiniteMass=1` makes the car unpushable; default is 0 because that contradicts 1:1.
 - `config.ini [d1dlc] chasePaths=1` (default) uses the files, `0` = civilian AI only. Without a file nothing changes.
 
+## Chased car behaviour (rule, 2026-10-19)
+
+The chased car must make a real chase: it never stops before its damage bar is full, and it always finds a way away from the player.
+
+- Keeps driving: the stall monitor and recovery run with and without a pad stream. The recovery starts after 30 steps without progress, after 15 steps off the road surface (`GetSurfaceIndex`, pavement, grass, trees) and at once when the civilian AI stopped for good (thrust state stop). Once the damage bar is full (`D1ChaseCar_Wrecked`, `mission.c`) the car stops for good.
+- Back to the road: the recovery heads for the nearest lane (`CivFindLaneNear`, any lane spot, no spawn rules) or, when none is near or it is much farther, for the last spot where the car drove on the road. It aims a block ahead along that lane so it merges in, drives slowly while it points more than 45 degrees off the lane, and hands back to the civilian AI only on the road surface, near the lane, lined up with it and with the way ahead free; the first 1.5 s after that are capped at town speed.
+- Eight body sensors (`SenseRing`, corners, front, back, sides; building, object or car): the recovery backs up (full opposite lock, off a blocked rear corner) only when the front is shut, until the nose points at the road with room ahead; driving on it steers towards the free front corner on the road side.
+- Off the road surface is measured on the surface, not with the lane finder: the spawn lane search skips short roads, road ends and spots near cars, so on a road it often finds nothing near and the car would go into recovery on a free road.
+- Bends: on a sharp bend at speed the car pulls the handbrake for a few steps (`D1ChaseCar_Avoid`), so it slides round instead of braking hard.
+- Damage: one ram of the player fills at most a sixth of the bar (`D1ChaseCar_LimitHit`, `bcollide.c`; contacts within a second are one ram), so it takes at least 6 rams, often 7 or 8.
+- Two old traps: a civilian AI car in thrust state stop has all wheels locked (`wheelforces.c`), so the recovery sets it to accelerate while it drives the car; a very hard hit marks car slot 1 `carMustDie` (stops for good), which a chased car ignores.
+- Speed: top speed 140 % of the highest road speed limit (`D1_CHASE_TOP_PCT`, `mission.c`), throttle 4779 like the recorded runs (`CIV_CHASE_ACCEL`), braking before bends from the route ahead (`CivCornerSpeed`).
+- Traffic (`smartTraffic=1`): runs red lights and gives no way, overtakes any slower car with a shorter gap check, slips past a slow car close ahead at once (`CivChaseSlipPast`, over the pavement if that side is free), keeps any lane, uses alleys (roads without traffic lanes) when the player is not near.
+- Player: with the player's car within 4000 units it weaves into a free side lane when the player is right behind, prefers turning off at a junction (3x weight) and never takes an exit towards the player (`CivChaserNear`, `CivExitWeight`).
+- Test: `REDRIVER2_CHASEKNOCK=1` pushes the car off the road beside it every 15 s, facing away, and logs how many steps it takes to drive on the road again (3 of 3 back, about 8 s). Damage per ram was checked with the player's car placed right behind the chased car at twice its speed every 5 s.
+
 ## Making the files
 
 `src_rebuild/tools/d1conv/d1chase_pack.py <routes folder> <install>\DRIVER1\CONVERTED` packs one JSON per variant (`group`, `entry`, `frames` with x, y, z, yaw, `reliable_frames`) into the files above. The routes come from an offline run of the D1 car step on the replay input of `REPLAY.BLK` (see `d1-car-physics.md`); the run matches the real ones exactly up to the first contact with traffic, so only those frames (300 to 471 per variant) are stored.

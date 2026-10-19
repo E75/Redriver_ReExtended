@@ -2052,6 +2052,8 @@ void MRSetVariable(MR_THREAD *thread, u_int var, int value)
 	}
 }
 
+#define D1_CHASE_TOP_PCT	140		// top speed of a Driver 1 chased car on a straight, percent of the highest road speed limit
+
 // [A] A chased car target of a Driver 1 mission (ram missions, d1_missions.cpp): driven by the civilian AI instead of the lead car AI.
 static int IsDriver1ChaseCar(MS_TARGET* target)
 {
@@ -2346,7 +2348,7 @@ int MRProcessTarget(MR_THREAD *thread, MS_TARGET *target)
 				// the road speed limit of the civilian AI is lifted to the highest one, lowered again for the bends ahead
 				if (IsDriver1ChaseCar(target) && cp->controlType == CONTROL_TYPE_CIV_AI)
 				{
-					cp->ai.c.maxSpeed = CivCornerSpeed(cp, WorldSpeedLimit(2));
+					cp->ai.c.maxSpeed = CivCornerSpeed(cp, WorldSpeedLimit(2) * D1_CHASE_TOP_PCT / 100);
 					civCornerBrake[cp->id] = 1;				}
 
 				// recorded route of the original run, then the civilian AI takes over
@@ -2426,6 +2428,9 @@ int MRProcessTarget(MR_THREAD *thread, MS_TARGET *target)
 						{
 							if (cp->totalDamage >= target->s.car.chasing.maxDamage)
 							{
+								if (IsDriver1ChaseCar(target))
+									D1ChaseCar_Wrecked();
+
 								if (NewLeadDelay != 1)
 								{
 									if (target->s.car.flags & CARTARGET_FLAG_TO_BE_STOLEN)
