@@ -80,6 +80,7 @@ extern char force_siren[8];
 extern SPEECH_QUEUE gSpeechQueue;
 
 extern void LoadBankFromLump(int bank, int lump); // 0x00052460
+extern int LoadBankFromBlock(char* name, int bank, int lump);
 
 extern int CarHasSiren(int index); // 0x000522EC
 extern int GetCarBankSample(int model); // 0x0004D690

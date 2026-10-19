@@ -23,6 +23,7 @@
 #include "sky.h"
 #include "debris.h"
 #include "felony.h"
+#include "d1garage.h"
 
 typedef struct __othercarsound
 {
@@ -140,12 +141,26 @@ static envsound envsnd[MAX_LEVEL_ENVSOUNDS];
 static envsoundinfo ESdata[2];
 tunnelinfo tunnels;
 
+static int LoadBankSpan(char* name, u_int start, u_int end, int bank, int lump)
+{
+	int size = end - start;
+
+	if (size <= 0 || start == 0 || end == 0) // [A]
+	{
+		printWarning("WARNING: sound bank lump %d of %s is not valid!\n", lump, name);
+		return 0;
+	}
+
+	LoadfileSeg(name, (char*)_sbank_buffer, start, size);
+	LoadSoundBankDynamic((char*)_sbank_buffer, size, bank);
+	return 1;
+}
+
 // [D] [T]
 void LoadBankFromLump(int bank, int lump)
 {
 	static u_int blockLimit[73] = { 0 };
 
-	int size;
 	char* name;
 
 	name = "SOUND\\VOICES2.BLK";
@@ -153,20 +168,19 @@ void LoadBankFromLump(int bank, int lump)
 	if (blockLimit[1] == 0)
 		LoadfileSeg(name, (char*)blockLimit, 0, sizeof(blockLimit));
 
-	size = blockLimit[lump + 1] - blockLimit[lump];
-	if(size <= 0)
-	{
-		printWarning("WARNING: sound bank lump %d is not valid!\n", lump);
-		return;
-	}
-	
-	LoadfileSeg(name, (char*)_sbank_buffer, blockLimit[lump], size);
-	if (size > 0 && blockLimit[lump] && blockLimit[lump + 1]) // [A]
-	{
-		LoadSoundBankDynamic((char*)_sbank_buffer, size, bank);
-	}
-	else
-		printWarning("WARNING: sound bank lump %d is not valid!\n", lump);
+	LoadBankSpan(name, blockLimit[lump], blockLimit[lump + 1], bank, lump);
+}
+
+// a block file starts with the offsets of its lumps; 0 when the file is missing or the lump is not valid
+int LoadBankFromBlock(char* name, int bank, int lump)
+{
+	u_int blockLimit[2];
+
+	if (!FileExists(name))
+		return 0;
+
+	LoadfileSeg(name, (char*)blockLimit, lump * sizeof(u_int), sizeof(blockLimit));
+	return LoadBankSpan(name, blockLimit[0], blockLimit[1], bank, lump);
 }
 
 // [D] [T]
@@ -492,6 +506,8 @@ void LoadLevelSFX(int missionNum)
 	// mission bank	
 	if (index != 0)
 		LoadBankFromLump(SOUND_BANK_MISSION, index);
+	else if (gD1DlcGarage)
+		D1Garage_LoadSpeech();
 
 	// special siren bank
 	if (BASE_CITY == 0 || BASE_CITY == 3)
