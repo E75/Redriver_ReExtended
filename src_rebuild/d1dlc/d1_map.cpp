@@ -140,7 +140,27 @@ struct D1Models
 	std::vector<ModelStats>			stats;			// extent + horizontal polygon area per model number
 	std::vector<std::set<int>>		areaModels;		// spooled model numbers per area
 	std::vector<std::set<int>>		pages;			// texture pages used by the polygons of each model number
+	std::vector<int>				boxReach;		// farthest collision box corner from the model origin, 0 = no boxes
 };
+
+// farthest corner of the model's collision boxes from its origin (block starts at the MODEL header)
+int BoxReach(const char* block, int size)
+{
+	const MODEL& model = *(const MODEL*)block;
+	if (model.collision_block <= 0 || model.collision_block + 4 > size)
+		return 0;
+
+	int count = *(const int*)(block + model.collision_block), reach = 0;
+	const COLLISION_PACKET* p = (const COLLISION_PACKET*)(block + model.collision_block + 4);
+
+	for (int i = 0; i < count && model.collision_block + 4 + (i + 1) * (int)sizeof(COLLISION_PACKET) <= size; i++)
+	{
+		double half = sqrt((double)p[i].xsize * p[i].xsize + (double)p[i].zsize * p[i].zsize) / 2;
+		reach = std::max(reach, (int)(sqrt((double)p[i].xpos * p[i].xpos + (double)p[i].zpos * p[i].zpos) + half));
+	}
+
+	return reach;
+}
 
 // adds the texture pages of the textured polygons of one model (block starts at the MODEL header)
 void CollectModelPages(const char* block, int size, std::set<int>& pages)
@@ -211,6 +231,7 @@ bool ParseModelInfo(const LevFile& d1, const D1Spool& si, D1Models& out)
 	out.stats.assign(count, ModelStats());
 	std::vector<std::pair<const char*, int>> blocks(count, { nullptr, 0 });
 	out.pages.assign(count, std::set<int>());
+	out.boxReach.assign(count, 0);
 
 	for (int i = 0; i < count; i++)
 	{
@@ -282,6 +303,8 @@ bool ParseModelInfo(const LevFile& d1, const D1Spool& si, D1Models& out)
 	{
 		if (!blocks[i].first)
 			continue;
+
+		out.boxReach[i] = BoxReach(blocks[i].first, blocks[i].second);
 
 		const int owner = ((const MODEL*)blocks[i].first)->instance_number;
 		const std::pair<const char*, int> vb = owner == -1 ? blocks[i] : (owner >= 0 && owner < count ? blocks[owner] : std::pair<const char*, int>(nullptr, 0));
@@ -1115,6 +1138,11 @@ bool D1Dlc_ConvertMap(const LevFile& d1, LevWriter& out, std::string& log)
 		const D1Object& o = uniq[u];
 		int radius = o.type < (int)models.bounding.size() && models.bounding[o.type] > 0 ? models.bounding[o.type] : kDefaultRadius;
 		radius = std::min(radius, kMaxRadius);
+
+		// collision is only checked against objects listed in the cells around a car: long walls (the car park's) need every
+		// cell their boxes reach, beyond the cap
+		if (o.type < (int)models.boxReach.size())
+			radius = std::max(radius, models.boxReach[o.type]);
 
 		int cx0 = std::max(0, g.CellX(o.x - radius)), cx1 = std::min(g.across - 1, g.CellX(o.x + radius));
 		int cz0 = std::max(0, g.CellZ(o.z - radius)), cz1 = std::min(g.down - 1, g.CellZ(o.z + radius));

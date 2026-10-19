@@ -15,6 +15,7 @@
 #include "cars.h"
 #include "targets.h"
 #include "system.h"
+#include "d1garage.h"
 
 int gDisplayPosition = 0;
 
@@ -127,6 +128,7 @@ void DrawMission(void)
 			DrawTimer(&Mission.timer[1]);
 
 			DrawProximityBar(&ProxyBar);
+			D1Garage_Draw();
 
 			if (gOutOfTape)
 			{

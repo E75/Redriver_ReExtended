@@ -30,6 +30,7 @@
 #include "shadow.h"
 #include "handling.h"
 #include "d1chase.h"
+#include "d1garage.h"
 #include "cutrecorder.h"
 #include "felony.h"
 
@@ -572,6 +573,7 @@ void LoadMission(int missionnum)
 	// the Driver 1 Garage and Test Level missions play in the car park level instead of the Training ground
 	gD1DlcGarage = GameType == GAME_DRIVER1MISSION && IS_D1_GARAGE_MISSION(gCurrentMissionNumber);
 	gD1LapsDriven = 0;
+	D1Garage_Reset();
 
 	// Driver 1 cities have no mission files: Take a Ride plays the Chicago mission in the selected city
 	if (!(GameType == GAME_TAKEADRIVE && IS_DRIVER1_CITY(GameLevel)))
@@ -1915,6 +1917,14 @@ int MRFunction(MR_THREAD *thread, u_int fnc)
 
 		gD1LapsDriven++;
 		MRPush(thread, laps > 0 && gD1LapsDriven >= laps);
+
+		return 1;
+	}
+	else if (fnc == 0x4000022 && GameType == GAME_DRIVER1MISSION)
+	{
+		// [A] Driver 1 garage test (d1garage.c): one frame of it, the test ends the mission itself
+		D1Garage_Step(MainPlayer.playerCarId >= 0 ? &car_data[MainPlayer.playerCarId] : NULL);
+		MRPush(thread, 0);
 
 		return 1;
 	}

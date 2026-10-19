@@ -979,7 +979,9 @@ void PlaceCameraFollowCar(PLAYER *lp)
 	jcam->hd.oBox.location.vy = jcam->hd.where.t[1] = -lp->cameraPos.vy;
 	jcam->hd.oBox.location.vz = jcam->hd.where.t[2] = basePos[2] + (cdist >> 13);
 
-	CheckScenaryCollisions(jcam);
+	// the car park's low ceiling would pull the camera in on every frame: there it keeps the distance of the other D1 levels
+	if (!gD1DlcGarage)
+		CheckScenaryCollisions(jcam);
 
 	lp->cameraDist += camExpandSpeed;
 

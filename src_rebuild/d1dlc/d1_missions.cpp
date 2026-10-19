@@ -221,10 +221,12 @@ const uint32_t CMD_STOP_THREAD = 0x1001000;
 const uint32_t CMD_START_THREAD = 0x1001002;
 const uint32_t FN_PROCESS_TARGET = 0x4000020;
 const uint32_t FN_D1_LAP_DONE = 0x4000021;			// engine function of Driver 1 missions (count, first target, laps): next lap, 1 when all are done
+const uint32_t FN_D1_GARAGE_TEST = 0x4000022;		// engine function of the garage test (d1garage.c): one frame of it, pushes 0
 const int kEndlessLaps = 0x7FFFFFFF;				// var 62 of a practice run; the script pushes 0 instead (pushed words stay below 0x1000000)
 const uint32_t VAR_MAX_COP_CARS = 0x2000103;
 const uint32_t VAR_MIN_COP_CARS = 0x2000102;
 const uint32_t WORD_MINUS_FOUR = 0xFFFFFFFC;
+const uint32_t WORD_MINUS_THREE = 0xFFFFFFFD;
 
 // car targets: D1 traffic type of SPAWN_CAR -> converted car model (type t = slot t - 1 of the city car list)
 const int kCarModels[4] = { -1, 0, 1, 2 };	// 1 = cop car, 2 and 3 = the two civilian cars
@@ -246,14 +248,17 @@ const int kTimerActiveMin = 659;						// D1 timer values below this are "no time
 const char kDefaultLoseTail[] = "Lose the tail.";
 
 // Garage and Test Level missions (scripts 117 and 118 of MISSION.BLK, city id 2 = the car park level IVIEW.LEV): start position,
-// cops off, a long wait and "Well done!". Their objectives live in code the converter does not know (SETVAR 39 / 40, chase
-// switches), so they become free drives: no target, no timer, no cops, no traffic. The car park is loaded in the Training
+// cops off, a long wait and "Well done!". Their objectives live in game code (SETVAR 39 / 40 switch it on), so they become
+// free drives: no target, no timer, no cops, no traffic; the driving test of 117 (var 40) runs in the engine from a script
+// loop that calls FN_D1_GARAGE_TEST every frame. The car park is loaded in the Training
 // slot (header city = Training, engine: IS_D1_GARAGE_MISSION). The desert scripts without a target (114-116) are free drives too;
 // op 110 picks their area of the desert.
 const int kGarageCityId = 2;
 const int kDesertCityId = 6;
 const int kFreeDriveOps[] = { 1, 2, 10, 19, 22, 24, 34, 38, 40, 49, 52, 61, 67, 84, 110 };
 const int kFreeDriveVars[] = { 39, 40, 45, 66 };
+const int kGarageTestVar = 40;
+const int kCarParkFirst = 117, kCarParkScripts = 2;	// listed before the desert scripts
 
 // Desert races and practice (106-113): checkpoints between LABEL 1 and GOTO 1 are one lap, var 62 = laps, LABEL 2 = finished;
 // D2 targets run once, so FN_D1_LAP_DONE resets the lap's checkpoints in the engine.
@@ -363,7 +368,7 @@ private:
 	bool ApplyScriptVariable(const Record& r);
 	bool ApplyTimerRecord(const Record& r);
 	bool CheckOutputStructure(bool needTargetLoop);
-	bool FinishFreeDrive(const std::vector<Record>& recs, std::vector<char>& d2ms);
+	bool FinishFreeDrive(const std::vector<Record>& recs, std::vector<char>& d2ms, bool garageTest);
 	bool ConvertRace(const std::vector<Record>& recs, std::vector<char>& d2ms);
 	bool AddRaceCheckpoint(const Record& target);
 	void PackD2msFile(std::vector<char>& d2ms) const;
@@ -717,6 +722,11 @@ bool Converter::CheckOutputStructure(bool needTargetLoop)
 				first + count > (int)m_targets.size() || s[i - 3] >= 0x1000000)
 				return Fail("check: lap branch at word %d", i);
 		}
+		else if (s[i] == CMD_BRANCH_IF && i >= 2 && s[i - 2] == FN_D1_GARAGE_TEST)
+		{
+			if (s[i - 1] != WORD_MINUS_THREE)
+				return Fail("check: garage test loop at word %d", i);
+		}
 		else if (s[i] == CMD_BRANCH_IF)
 		{
 			if (i < 3 || s[i - 1] != WORD_MINUS_FOUR || s[i - 2] != FN_PROCESS_TARGET)
@@ -807,7 +817,13 @@ bool Converter::ConvertRecords(const std::vector<Record>& recs, std::vector<char
 	m_head[H_MSG_DOORS] = -1;
 
 	if (first[OP_CITY]->args[0] == kGarageCityId || (first[OP_CITY]->args[0] == kDesertCityId && !first[OP_TARGET0]))
-		return FinishFreeDrive(recs, d2ms);
+	{
+		bool garageTest = false;
+		for (const Record& r : recs)
+			garageTest |= first[OP_CITY]->args[0] == kGarageCityId && r.op == OP_SETVAR && r.args[0] == kGarageTestVar;
+
+		return FinishFreeDrive(recs, d2ms, garageTest);
+	}
 
 	if (first[OP_CITY]->args[0] == kDesertCityId)
 		return ConvertRace(recs, d2ms);
@@ -1058,7 +1074,7 @@ bool Converter::ConvertRecords(const std::vector<Record>& recs, std::vector<char
 	return true;
 }
 
-bool Converter::FinishFreeDrive(const std::vector<Record>& recs, std::vector<char>& d2ms)
+bool Converter::FinishFreeDrive(const std::vector<Record>& recs, std::vector<char>& d2ms, bool garageTest)
 {
 	for (const Record& r : recs)
 	{
@@ -1070,6 +1086,14 @@ bool Converter::FinishFreeDrive(const std::vector<Record>& recs, std::vector<cha
 	}
 
 	m_head[H_COP_MAX] = 0;
+
+	if (garageTest)
+	{
+		m_script.push_back(FN_D1_GARAGE_TEST);
+		m_script.push_back(WORD_MINUS_THREE);
+		m_script.push_back(CMD_BRANCH_IF);
+	}
+
 	m_script.push_back(CMD_STOP_THREAD);
 
 	m_head[H_MSG_WRECKED] = m_strings.Add("You wrecked your vehicle.");
@@ -1301,9 +1325,9 @@ std::string MissionPath(int number)
 std::string ExtraTitle(int scriptIndex)
 {
 	if (scriptIndex == 117)
-		return "Garage Mission";
+		return "Car park";
 	if (scriptIndex == 118)
-		return "Test Level Mission";
+		return "Car park Drive";
 	if (scriptIndex >= 114)
 		return "Desert Drive " + std::to_string(scriptIndex - 113);
 	if (scriptIndex >= 110)
@@ -1404,10 +1428,11 @@ bool ConvertAll(const std::vector<char>& blk)
 	int skipped = 0;
 	g_missions.clear();
 
-	// the 44 story missions, then the desert races, practice laps and drives, Garage and Test Level
+	// the 44 story missions, then the car park (117, 118) and the desert races, practice laps and drives (106-116)
 	for (int k = 0; k < D1MISSION_STORY_COUNT + D1MISSION_FREE_COUNT; k++)
 	{
-		const int scriptIndex = k < D1MISSION_STORY_COUNT ? k : D1MISSION_FREE_FIRST + k - D1MISSION_STORY_COUNT;
+		const int extra = k - D1MISSION_STORY_COUNT;
+		const int scriptIndex = k < D1MISSION_STORY_COUNT ? k : extra < kCarParkScripts ? kCarParkFirst + extra : D1MISSION_FREE_FIRST + extra - kCarParkScripts;
 
 		if (scriptIndex >= (int)(table / 4))
 			break;
