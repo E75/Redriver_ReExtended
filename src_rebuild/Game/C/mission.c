@@ -160,6 +160,7 @@ int cop_adjust = 0;
 
 int gLapTimes[2][5];
 int gNumRaceTrackLaps = 3;
+static int gD1LapsDriven;		// [A] laps of a Driver 1 desert race so far
 int lastsay = -1;
 
 int gCarWithABerm = -1;
@@ -570,6 +571,7 @@ void LoadMission(int missionnum)
 
 	// the Driver 1 Garage and Test Level missions play in the car park level instead of the Training ground
 	gD1DlcGarage = GameType == GAME_DRIVER1MISSION && IS_D1_GARAGE_MISSION(gCurrentMissionNumber);
+	gD1LapsDriven = 0;
 
 	// Driver 1 cities have no mission files: Take a Ride plays the Chicago mission in the selected city
 	if (!(GameType == GAME_TAKEADRIVE && IS_DRIVER1_CITY(GameLevel)))
@@ -1898,6 +1900,21 @@ int MRFunction(MR_THREAD *thread, u_int fnc)
 		value = MRProcessTarget(thread, &MissionTargets[value]);
 
 		MRPush(thread, value);
+
+		return 1;
+	}
+	else if (fnc == 0x4000021 && GameType == GAME_DRIVER1MISSION)
+	{
+		// [A] Driver 1 lap (d1_missions.cpp): the lap's checkpoints count again, 1 once all laps are driven (laps 0 = practice, endless)
+		int laps = MRPop(thread);
+		int first = MRPop(thread);
+		int count = MRPop(thread);
+
+		for (value = first; value < first + count && value < MAX_MISSION_TARGETS; value++)
+			MissionTargets[value].s.target_flags &= ~TARGET_FLAG_COMPLETED_ALLP;
+
+		gD1LapsDriven++;
+		MRPush(thread, laps > 0 && gD1LapsDriven >= laps);
 
 		return 1;
 	}

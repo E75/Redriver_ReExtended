@@ -220,6 +220,8 @@ const uint32_t CMD_COMPLETE = 0x1001001;
 const uint32_t CMD_STOP_THREAD = 0x1001000;
 const uint32_t CMD_START_THREAD = 0x1001002;
 const uint32_t FN_PROCESS_TARGET = 0x4000020;
+const uint32_t FN_D1_LAP_DONE = 0x4000021;			// engine function of Driver 1 missions (count, first target, laps): next lap, 1 when all are done
+const int kEndlessLaps = 0x7FFFFFFF;				// var 62 of a practice run; the script pushes 0 instead (pushed words stay below 0x1000000)
 const uint32_t VAR_MAX_COP_CARS = 0x2000103;
 const uint32_t VAR_MIN_COP_CARS = 0x2000102;
 const uint32_t WORD_MINUS_FOUR = 0xFFFFFFFC;
@@ -252,6 +254,13 @@ const int kGarageCityId = 2;
 const int kDesertCityId = 6;
 const int kFreeDriveOps[] = { 1, 2, 10, 19, 22, 24, 34, 38, 40, 49, 52, 61, 67, 84, 110 };
 const int kFreeDriveVars[] = { 39, 40, 45, 66 };
+
+// Desert races and practice (106-113): checkpoints between LABEL 1 and GOTO 1 are one lap, var 62 = laps, LABEL 2 = finished;
+// D2 targets run once, so FN_D1_LAP_DONE resets the lap's checkpoints in the engine.
+enum { OP_INC = 12, OP_BEST_TIME = 101, OP_LABEL = 105, OP_GOTO = 106, OP_SPLIT_TIME = 107, OP_JUMP_IF_EQ = 109 };
+enum { VAR_LAPS = 62, VAR_LAP_COUNT = 63 };
+const int kRaceIgnoredOps[] = { 10, 11, 19, 24, 28, 34, 52, 55, 110 };
+const int kRaceIgnoredVars[] = { 45, 66 };
 
 // Ram missions: the D1 target car drives a recorded run (REPLAY.BLK) that needs the D1 physics. Adaptation: a chase car
 // target that the engine puts on the lane nearest to the given spot (a little ahead of the player start), driven by the
@@ -355,6 +364,8 @@ private:
 	bool ApplyTimerRecord(const Record& r);
 	bool CheckOutputStructure(bool needTargetLoop);
 	bool FinishFreeDrive(const std::vector<Record>& recs, std::vector<char>& d2ms);
+	bool ConvertRace(const std::vector<Record>& recs, std::vector<char>& d2ms);
+	bool AddRaceCheckpoint(const Record& target);
 	void PackD2msFile(std::vector<char>& d2ms) const;
 
 	int					m_head[H_COUNT];
@@ -695,7 +706,18 @@ bool Converter::CheckOutputStructure(bool needTargetLoop)
 		if (s[i] == FN_PROCESS_TARGET && (i < 1 || s[i - 1] >= (uint32_t)m_targets.size() || m_targets[s[i - 1]].ints[0] == 0))
 			return Fail("check: ProcessTarget at word %d uses an empty target", i);
 
-		if (s[i] == CMD_BRANCH_IF)
+		if (s[i] == CMD_BRANCH_IF && i >= 6 && s[i - 2] == FN_D1_LAP_DONE)
+		{
+			long long back = (long long)i + 1 + (int)s[i - 1];
+			int first = (int)s[i - 4], count = (int)s[i - 5];
+			bool lapStart = back >= 0 && back + 2 < i && (s[(size_t)back + 1] == FN_PROCESS_TARGET ||
+				(s[(size_t)back + 1] == VAR_TIMER && s[(size_t)back + 2] == CMD_SET_VARIABLE));		// a practice lap starts with the clock at 0
+
+			if ((int)s[i - 1] >= 0 || !lapStart || count < 1 || first < 0 ||
+				first + count > (int)m_targets.size() || s[i - 3] >= 0x1000000)
+				return Fail("check: lap branch at word %d", i);
+		}
+		else if (s[i] == CMD_BRANCH_IF)
 		{
 			if (i < 3 || s[i - 1] != WORD_MINUS_FOUR || s[i - 2] != FN_PROCESS_TARGET)
 				return Fail("check: BranchIf at word %d is not a ProcessTarget loop", i);
@@ -786,6 +808,9 @@ bool Converter::ConvertRecords(const std::vector<Record>& recs, std::vector<char
 
 	if (first[OP_CITY]->args[0] == kGarageCityId || (first[OP_CITY]->args[0] == kDesertCityId && !first[OP_TARGET0]))
 		return FinishFreeDrive(recs, d2ms);
+
+	if (first[OP_CITY]->args[0] == kDesertCityId)
+		return ConvertRace(recs, d2ms);
 
 	for (const Record& r : recs)
 	{
@@ -1060,6 +1085,149 @@ bool Converter::FinishFreeDrive(const std::vector<Record>& recs, std::vector<cha
 	return true;
 }
 
+bool Converter::AddRaceCheckpoint(const Record& target)
+{
+	if ((int)m_targets.size() >= kMaxTargets)
+		return Fail("more than 16 targets");
+
+	Target point;
+	point.ints[0] = kTargetPoint;
+	point.ints[2] = kPointDisplay;
+	point.ints[3] = target.args[1];		// x
+	point.ints[4] = target.args[2];		// z
+	point.ints[5] = target.args[0];		// radius
+	point.ints[8] = -1;
+	m_targets.push_back(point);
+
+	m_script.push_back((uint32_t)m_targets.size() - 1);
+	m_script.push_back(FN_PROCESS_TARGET);
+	m_script.push_back(WORD_MINUS_FOUR);
+	m_script.push_back(CMD_BRANCH_IF);
+	return true;
+}
+
+bool Converter::ConvertRace(const std::vector<Record>& recs, std::vector<char>& d2ms)
+{
+	enum { BEFORE_LAPS, IN_LAP, LAPS_DONE, FINISHED } phase = BEFORE_LAPS;
+	const Record* target = NULL;
+	std::string finishText = "Finished!";
+	int laps = 0, firstLapTarget = -1, lapStart = -1;
+	bool armed = false;
+
+	m_head[H_COP_MAX] = 0;
+	m_head[H_TIMER] = kTimerCounterFlag << 16;		// the clock is set to 0 again at the start line
+
+	for (size_t i = 0; i < recs.size(); i++)
+	{
+		const Record& r = recs[i];
+
+		if (r.op == OP_TARGET0)
+			target = &r;
+		else if (r.op == OP_TARGET0_ON)
+			armed = target != NULL;
+		else if (r.op == OP_WAIT_STATE)
+		{
+			if (!armed || phase == LAPS_DONE || phase == FINISHED)
+				return Fail("race: WAIT_STATE without a checkpoint");
+
+			if (phase == IN_LAP && firstLapTarget < 0)
+				firstLapTarget = (int)m_targets.size();
+
+			if (!AddRaceCheckpoint(*target))
+				return false;
+
+			armed = false;
+		}
+		else if (r.op == OP_SETVAR)
+		{
+			int var = r.args[0], value = r.args[1];
+
+			if (var == VAR_LAPS && value > 0)
+				laps = value;
+			else if (var == VAR_LAP_COUNT && value == 0)
+				;
+			else if (var == VAR_STATE && value == kStateWaitTarget)
+				armed = target != NULL;
+			else if (var == VAR_MAX_DAMAGE && value >= kMinDamage && value <= kMaxDamage)
+				m_head[H_MAX_DAMAGE] = value;
+			else if (!In(var, kRaceIgnoredVars) || r.hasText)
+				return Fail("race: SETVAR %d = %d", var, value);
+		}
+		else if (r.op == OP_MESSAGE)
+		{
+			int seconds = r.args[0] / kFramesPerSecond;
+
+			if (phase == FINISHED)
+				finishText = r.text;
+			else if (!(phase == BEFORE_LAPS && r.text.size() == 1 && r.text[0] >= '1' && r.text[0] <= '9'))	// the countdown does not wait in D2
+			{
+				m_script.push_back(seconds < 1 ? 1 : seconds);
+				m_script.push_back(m_strings.Add(r.text));
+				m_script.push_back(CMD_SHOW_MESSAGE);
+			}
+		}
+		else if (r.op == OP_TIMER_UP)
+		{
+			if (phase == LAPS_DONE || phase == FINISHED)
+				return Fail("race: TIMER_UP after the laps");
+
+			m_script.push_back(0);
+			m_script.push_back(VAR_TIMER);
+			m_script.push_back(CMD_SET_VARIABLE);
+		}
+		else if (r.op == OP_LABEL && r.args[0] == 1 && phase == BEFORE_LAPS)
+		{
+			phase = IN_LAP;
+			lapStart = (int)m_script.size();
+		}
+		else if (r.op == OP_INC && r.args[0] == VAR_LAP_COUNT && phase == IN_LAP)
+			;
+		else if (r.op == OP_JUMP_IF_EQ && phase == IN_LAP && r.args[0] == VAR_LAP_COUNT && r.args[1] == VAR_LAPS && r.args[2] == 2)
+			;
+		else if (r.op == OP_GOTO && r.args[0] == 1 && phase == IN_LAP)
+		{
+			if (firstLapTarget < 0 || laps < 1)
+				return Fail("race: lap without checkpoints or lap count");
+
+			int lapTargets = (int)m_targets.size() - firstLapTarget;
+
+			m_script.push_back(lapTargets);
+			m_script.push_back(firstLapTarget);
+			m_script.push_back(laps == kEndlessLaps ? 0 : laps);
+			m_script.push_back(FN_D1_LAP_DONE);
+			m_script.push_back((uint32_t)(lapStart - ((int)m_script.size() + 2)));		// back to the first checkpoint of the lap
+			m_script.push_back(CMD_BRANCH_IF);
+			phase = LAPS_DONE;
+		}
+		else if (r.op == OP_LABEL && r.args[0] == 2 && phase == LAPS_DONE)
+			phase = FINISHED;
+		else if (r.op == OP_SPLIT_TIME || r.op == OP_BEST_TIME)
+			m_notes.insert("lap and best times not shown");
+		else if (r.op == OP_END && i == recs.size() - 1 && phase == FINISHED)
+		{
+			m_script.push_back(CMD_COMPLETE);
+			m_script.push_back(CMD_STOP_THREAD);
+		}
+		else if (!In(r.op, kRaceIgnoredOps))
+			return Fail("race: record %d", r.op);
+	}
+
+	if (phase != FINISHED)
+		return Fail("race: no finished lap loop");
+
+	m_head[H_MSG_WRECKED] = m_strings.Add("You wrecked your vehicle.");
+	m_head[H_MSG_OUT_OF_TIME] = m_strings.Add("Out of time");
+	m_head[H_MSG_COMPLETE] = m_strings.Add(finishText);
+	m_head[H_MSG_DROWNED] = m_strings.Add("You drowned.");
+	m_head[H_STRINGS] = (int)m_script.size();
+
+	if (!CheckOutputStructure(true))
+		return false;
+
+	PackD2msFile(d2ms);
+	return true;
+}
+
 } // namespace
 
 bool D1Missions_ConvertScript(const std::vector<char>& script, std::vector<char>& d2ms, std::string& title, int& city, std::string& why)
@@ -1129,15 +1297,19 @@ std::string MissionPath(int number)
 	return path;
 }
 
-// menu title of a free drive script (D1MISSION_FREE_FIRST on)
-std::string FreeDriveTitle(int scriptIndex)
+// menu title of a script after the story missions (D1MISSION_FREE_FIRST on)
+std::string ExtraTitle(int scriptIndex)
 {
 	if (scriptIndex == 117)
 		return "Garage Mission";
 	if (scriptIndex == 118)
 		return "Test Level Mission";
+	if (scriptIndex >= 114)
+		return "Desert Drive " + std::to_string(scriptIndex - 113);
+	if (scriptIndex >= 110)
+		return "Desert Practice " + std::to_string(scriptIndex - 109);
 
-	return "Desert Drive " + std::to_string(scriptIndex - D1MISSION_FREE_FIRST + 1);
+	return "Desert Race " + std::to_string(scriptIndex - 105);
 }
 
 // printable ASCII only, the frontend font has nothing else
@@ -1232,7 +1404,7 @@ bool ConvertAll(const std::vector<char>& blk)
 	int skipped = 0;
 	g_missions.clear();
 
-	// the 44 story missions, then the free drives (desert, Garage, Test Level)
+	// the 44 story missions, then the desert races, practice laps and drives, Garage and Test Level
 	for (int k = 0; k < D1MISSION_STORY_COUNT + D1MISSION_FREE_COUNT; k++)
 	{
 		const int scriptIndex = k < D1MISSION_STORY_COUNT ? k : D1MISSION_FREE_FIRST + k - D1MISSION_STORY_COUNT;
@@ -1263,7 +1435,7 @@ bool ConvertAll(const std::vector<char>& blk)
 		MissionEntry e;
 		e.number = D1MISSION_BASE + scriptIndex;
 		e.city = city;
-		e.title = k < D1MISSION_STORY_COUNT ? MenuTitle(title, k) : FreeDriveTitle(scriptIndex);
+		e.title = k < D1MISSION_STORY_COUNT ? MenuTitle(title, k) : ExtraTitle(scriptIndex);
 
 		if (!WriteWhole(MissionPath(e.number), d2ms.data(), d2ms.size()))
 		{

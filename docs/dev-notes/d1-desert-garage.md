@@ -14,7 +14,7 @@ Goal: the Driver 1 desert missions (dirt track races, practice laps, free drives
 
 ## Parts
 
-1. City 6 plays in the Training slot (`TRAIN.LEV`), scripts 114-116 convert as free drives, menu button of the Training slot lists desert and garage missions. Done when `-d1mission 114` starts in the desert and the menu shows the three drives.
-2. Dirt track races and practice (106-113): checkpoints per lap in order, lap counter and "Lap" / "Finished!" messages, count-up timer with lap times. Needs a way to repeat checkpoints for N laps (D2 targets run once, 16 at most).
+1. Done: city 6 plays in the Training slot (`TRAIN.LEV`), scripts 114-116 convert as free drives ("Desert Drive 1-3"), the menu button "Desert, Garage" lists the desert and garage missions.
+2. Done: races and practice laps (106-113, "Desert Race 1-4", "Desert Practice 1-4"). `ConvertRace` turns the checkpoints into a ProcessTarget chain; at the end of a lap the engine function `0x4000021` (mission.c, Driver 1 missions only) clears the lap's checkpoints and returns 1 after the last lap (laps 0 = practice, endless). Practice resets the clock every lap like the original. Not done: the 3-2-1 countdown (D2 scripts cannot wait, only "GO" is shown), split and best times. Tested with a hook that moves the car to the active checkpoint: race 107 completes after 5 laps, practice 110 keeps going.
 3. Spoke wheel car: every desert mission uses the player car of `TRAIN.LEV`.
 4. Garage test (117 / 118) like the original: needs the test logic of the original executable (not in the repo or this PC; ask the user for it).
