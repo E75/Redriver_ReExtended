@@ -21,6 +21,12 @@ extern int D1ChasePath_ProcessPad(CAR_DATA* cp);
 // chase car on the civilian AI: feelers ahead turn it away from buildings and cars and brake it for what it cannot take at speed
 extern void D1ChaseCar_Avoid(CAR_DATA* cp);
 
+// the damage bar of the chased car is full: it stops and is no longer brought back to the road
+extern void D1ChaseCar_Wrecked(void);
+
+// caps one ram (contacts within a second) at a sixth of the damage bar; before = damage total before the contact
+extern void D1ChaseCar_LimitHit(CAR_DATA* cp, int before);
+
 // false when a hit on this car must not raise its damage total: the chased car only takes damage from the player's car
 extern int D1ChaseCar_DamageCounts(CAR_DATA* cp, CAR_DATA* other);
 

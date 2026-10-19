@@ -42,7 +42,8 @@ extern int CivDensityTarget(void);
 extern int CivCarsNearPlayer(void);
 extern void UpdateCivDeficit(void);	// once per ping in round: fewer cars than the target near the player
 extern unsigned char civCornerBrake[MAX_CARS];
-extern int CivCornerSpeed(CAR_DATA* cp);	// speed limit for the bends ahead on the route of a chased car
+extern int gSmartTraffic;		// config.ini [ai] smartTraffic
+extern int CivCornerSpeed(CAR_DATA* cp, int top);	// speed limit for the bends ahead on the route, top = speed on a straight
 #endif
 extern void CreateRoadblock(); // 0x0002BCF4
 
@@ -58,7 +59,7 @@ extern int CreateCivCarWotDrivesABitThenStops(int direction, LONGVECTOR4* startP
 extern int CreateStationaryCivCar(int direction, int orientX, int orientZ, LONGVECTOR4* startPos, int externalModel, int palette, int controlFlags); // 0x00028960
 
 extern int CreateDrivingCivCarNear(int x, int z, int heading, int externalModel, int palette);	// Driver 1 mission target car
-extern int CivFindLaneNear(CAR_DATA* cp, EXTRA_CIV_DATA* outDat, int* outX, int* outZ);		// nearest traffic lane of a car, for rejoining the traffic
+extern int CivFindLaneNear(CAR_DATA* cp, int heading, EXTRA_CIV_DATA* outDat, int* outX, int* outZ, int* outDir);	// nearest traffic lane spot going about this heading (and its direction), for rejoining the traffic
 
 extern int CheckChangeLanes(DRIVER2_STRAIGHT* straight, DRIVER2_CURVE* curve, int distAlongSegment, CAR_DATA* cp, int tryToPark); // 0x00026F20
 extern int NotTravellingAlongCurve(int x, int z, int dir, DRIVER2_CURVE* cv);

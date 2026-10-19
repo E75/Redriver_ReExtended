@@ -689,6 +689,8 @@ int main(int argc, char** argv)
 		ini_sget(config, "d1dlc", "chasePaths", "%d", &gD1ChasePaths);
 		extern int gD1Handling;
 		ini_sget(config, "d1dlc", "d1Handling", "%d", &gD1Handling);
+		extern int gSmartTraffic;
+		ini_sget(config, "ai", "smartTraffic", "%d", &gSmartTraffic);
 		
 	
 		gCameraDefaultScrZ = MAX(MIN(newScrZ, 384), 128);

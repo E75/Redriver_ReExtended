@@ -475,7 +475,12 @@ int DamageCar3D(CAR_DATA *cp, LONGVECTOR4* delta, int strikeVel, CAR_DATA *pOthe
 	// if cop cars colliding with themselves, only apply fake damage
 	fakeDamage = (cp->controlType == CONTROL_TYPE_PURSUER_AI && pOtherCar->controlType == CONTROL_TYPE_PURSUER_AI) || !D1ChaseCar_DamageCounts(cp, pOtherCar);
 
-	ApplyDamage(cp, region, value, fakeDamage);
+	{
+		int damageBefore = cp->totalDamage;
+
+		ApplyDamage(cp, region, value, fakeDamage);
+		D1ChaseCar_LimitHit(cp, damageBefore);
+	}
 #ifndef PSX
 	MirrorCentreDamage(cp, region, door, value);
 #endif
