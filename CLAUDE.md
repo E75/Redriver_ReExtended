@@ -35,6 +35,7 @@ Fork of REDRIVER2 (Driver 2 as PC C code, graphics layer PsyCross = PSX API on S
 
 ## Repo rules
 
+- Branch `feature/wspc-import` (WSPC DLC) stays separate and intact: never merge it into `main`, never rebase or edit it, and never open a merge PR for it, unless the user explicitly says so. When asked to "merge all branches", skip it.
 - Never commit or ship game data (Driver 1 or 2) or files derived from it. Driver 1 is converted at runtime into `DRIVER1\CONVERTED\`.
 - Every Driver 1 feature is gated (`IS_DRIVER1_CITY(GameLevel)`, `IS_DRIVER1_MISSION(n)`, `GameType == GAME_DRIVER1MISSION`), never changes a Driver 2 code path, has a kill switch or missing-data fallback, and logs instead of failing.
 - Repo and commit text stays neutral about where the format knowledge comes from: talk about "the source data", formats, opcodes and meanings; no executable addresses, no code listings, no third-party extractor links.
