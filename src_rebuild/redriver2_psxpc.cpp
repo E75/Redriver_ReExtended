@@ -63,6 +63,7 @@ extern int gCarLighting;
 extern int gDayCycle;
 extern int gDistanceFog;
 extern int gVolumeLights;
+extern int gRoadReflect;
 extern int gAtmosphere;
 extern int gSunShadows;
 extern int gCarGloss;
@@ -652,6 +653,7 @@ int main(int argc, char** argv)
 		ini_sget(config, "render", "skyHd", "%d", &gSkyHd);
 		ini_sget(config, "render", "distanceFog", "%d", &gDistanceFog);
 		ini_sget(config, "render", "volumeLights", "%d", &gVolumeLights);
+		ini_sget(config, "render", "roadReflect", "%d", &gRoadReflect);
 		ini_sget(config, "render", "atmosphere", "%d", &gAtmosphere);
 		ini_sget(config, "render", "sunShadows", "%d", &gSunShadows);
 		ini_sget(config, "render", "carGloss", "%d", &gCarGloss);

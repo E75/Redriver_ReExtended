@@ -59,6 +59,14 @@ Gemeten met een tijdelijke dump in een private build (`_cleanbuild_vol`, niet in
 - Gemeten: `atmosphere=0` tegen een build van `HEAD`: 0,00% pixelverschil (Chicago dag, dusk, fog, tegen de zon in). Aan: Chicago 43%, Havana 9%, Vegas 38%, Miami 31%, LA 7%, NY 52% pixels anders, vooral de verre banden; Frisco Nob Hill 0% (camera op 8268 hoog, de laag ligt in de dalen).
 - Gezien: waas over de verre skyline, warm bij dusk; fog dichter in de straat. Menu-rij niet in het spel gezien.
 
+### 0e. Lampglans op de weg (branch `feature/lamp-reflections`)
+
+- Code: uniform `u_roadSpec` en `PsyX_SetRoadSpec` (`PsyX_render.cpp`, `PsyX_public.h`); alleen grondtegels (mode 2), alleen ondoorzichtig. `draw.c UpdateVolumeLights` zet de sterkte: `gRoadReflect` (config.ini `[render] roadReflect`, standaard 1) en dichtheid > 0 (nacht, regen, fog of daycycle); 0.15 droog .. 1 nat (sneeuw 0.5).
+- Model: anisotrope spiegelstreep. `h = normalize(lampRichting + kijkrichting)`, `lat = dot(h, normalize(cross(n, kijk)))`, `pow(dot(n,h), 2..8) * exp(-lat^2 * 120..1200)`: een lange, smalle streep naar de camera toe, smaller naar mate de weg natter is. Bereik 14 x lamp-straal.
+- Twee takken in `beamLight`: de omni/sirene-tak (eigen lichten, sirenes) en de kegel-tak. Straatlantaarns en koplampen vallen allebei in de kegel-tak (richting horizontaal, straal 360); alleen de hoogte boven de weg (`dot(toLamp, n)` 150..400) scheidt ze, anders krijgen koplampen van tegenliggers witte verticale spijkers. Lage lampen krijgen dus geen glans.
+- `debris.c DisplayLightReflections` doet niets meer bij `roadReflect=1` (de shader neemt het over); dat haalt ook de rode achterlicht-reflecties weg. Met `roadReflect=0` is het oude beeld ongewijzigd.
+- Open: de schuine lichtstraal in de lucht (ook met `roadReflect=0` zichtbaar, dus een bestaand volumelicht), glans van auto's zelf, bloom.
+
 ---
 
 ## 1. Uitgangssituatie (gemeten in de code, 2026-10-14)
