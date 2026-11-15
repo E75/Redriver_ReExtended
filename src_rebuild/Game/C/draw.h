@@ -17,7 +17,7 @@ struct _pct
 	u_int planeColours[8];
 	int scribble[8];
 	u_short(*ptexture_pages)[128];
-	u_short(*ptexture_cluts)[128][32];
+	u_short(*ptexture_cluts)[128][TEXTURE_CLUTS_PER_PAGE];
 	struct DB* current;
 	SVECTOR* verts;
 	int* polySizes;

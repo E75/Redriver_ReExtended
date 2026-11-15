@@ -292,10 +292,10 @@ const int kNoGettingFarMessage = 255;
 const double kPi = 3.14159265358979323846;
 
 // records the D2 mission logic has no counterpart for (cosmetic, HUD, unused tuning, hand-over to the next story mission)
-const int kIgnoredOps[] = { 10, 11, 20, 24, 28, 30, 31, 48, 51, 64, 67, 68, 88, 92, 104 };		// 20 = SpawnCops (cop ambush spots, D2 cops spawn from the felony)
-const int kIgnoredVars[] = { 8, 9, 14, 15, 16, 28, 45, 47, 48, 49, 50, 52, 59, 60, 61, 69, 70 };
+const int kIgnoredOps[] = { 10, 11, 20, 24, 28, 30, 31, 39, 40, 48, 51, 63, 64, 65, 66, 67, 68, 88, 92, 103, 104 };		// 20 = SpawnCops (cop ambush spots, D2 cops spawn from the felony), 65 = DAMAGE_LIMIT [n] (D2 wreck rules apply instead), 39 / 40 / 63 / 66 = prescan-only flag setters (no runtime effect, d1-missions.md section 2), 103 = MARKER_PROPS [0, 0, 100|101] (marker look, assumed cosmetic)
+const int kIgnoredVars[] = { 8, 9, 14, 15, 16, 28, 37, 45, 47, 48, 49, 50, 51, 52, 59, 60, 61, 69, 70 };		// 37 = flag between two passenger scenes (scenes are skipped), 51 = heat threshold tuning (cop level curve, D2 cops follow the felony instead)
 // passenger scene: pedestrians walk to or from the car, short camera. Skipped by design.
-const int kSceneOps[] = { 74, 77, 78, 80, 82, 83, 112 };
+const int kSceneOps[] = { 74, 77, 78, 80, 82, 83, 111, 112 };
 // a spawned car with one of these records around has a role (target, scene, save) the converter cannot map yet
 const int kCarRoleOps[] = { 20, 96, 97, 102, 113, 114 };
 
@@ -320,6 +320,7 @@ enum
 };
 
 const int kStateWaitTarget = 2;
+const char kDefaultFailText[] = "Too late. Mission failed.";
 
 // Zero terminated string block; Add returns the byte offset the script uses.
 class Strings
@@ -514,9 +515,14 @@ bool Converter::ApplyScriptVariable(const Record& r)
 	if (var == VAR_FAIL_TEXT && r.hasText)
 	{
 		if (m_hasFailText && m_failText != r.text)
-			return Fail("two different timeout texts");
+		{
+			// one timeout text per D2 mission: legs with their own text share a neutral one
+			m_failText = kDefaultFailText;
+			m_notes.insert("legs with different timeout texts share one neutral text");
+		}
+		else
+			m_failText = r.text;
 
-		m_failText = r.text;
 		m_hasFailText = true;
 	}
 	else if (var == VAR_STATE && value == kStateRam)
@@ -939,9 +945,9 @@ bool Converter::ConvertRecords(const std::vector<Record>& recs, std::vector<char
 		}
 		else if (op == OP_SPAWN_CAR)
 		{
-			int carType = r.args[1], palette = r.args[2], rot = r.args[3], cx = r.args[4], cz = r.args[5];
+			int carType = r.args[1], palette = r.args[2] % (kMaxPalette + 1), rot = r.args[3], cx = r.args[4], cz = r.args[5];
 
-			if (carType < 1 || carType > 3 || palette < 0 || palette > kMaxPalette)
+			if (carType < 1 || carType > 3 || palette < 0)
 				return Fail("SPAWN_CAR type %d palette %d", carType, palette);
 			if (carRole)
 				return Fail("spawned car has a role (target, scene or save)");
@@ -1037,6 +1043,8 @@ bool Converter::ConvertRecords(const std::vector<Record>& recs, std::vector<char
 			m_notes.insert("passenger scene skipped");
 		else if (In(op, kIgnoredOps))
 			m_notes.insert("ignored records");
+		else if (op == 4 || (op == 87 && i > lastWait))
+			m_notes.insert("TRIGGER3 cop tuning tiers (speed scale 3700-4300 by distance) and the hand-over check after the last target skipped");
 		else
 			return Fail("record %d", op);
 	}

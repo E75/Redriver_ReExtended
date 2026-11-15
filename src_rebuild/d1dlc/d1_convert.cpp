@@ -902,8 +902,8 @@ void CheckTextures(CheckContext& c, TexInfo& tex, std::vector<char>& names)
 
 		int palettes;
 		memcpy(&palettes, c.lev.Data(c.lev.GetLumpInfo().tpage_offset + start), 4);
-		if (palettes < 1 || palettes > 32)
-			c.Fail("permanent page %d starts with %d palettes", tex.perm[i].x, palettes);
+		if (palettes < 1 || palettes > 64)
+			c.Fail("permanent page %d (entry %d of %d, %d bytes at %d) starts with %d palettes", tex.perm[i].x, i, tex.numPerm, tex.perm[i].y, start, palettes);
 	}
 
 	for (size_t p = 0; p < tex.pages.size(); p++)

@@ -27,6 +27,7 @@
 #define IS_D1_GARAGE_MISSION(n)	((n) == D1_MISSION_BASE + 117 || (n) == D1_MISSION_BASE + 118)	// car park level (IVIEW.LEV) in the Training slot, see d1dlc.h gD1DlcGarage
 #define FIRST_D1_PLAYER_CAR		8		// the converter moves the D1 player cars (D1 models 5..9) to 8..12
 #define D1_CAR_SIZE_PERCENT		120		// D1 cars are this big in percent of the D2 cars (D2 = 100), one setting for every D1 car (cosmetic.c)
+#define TEXTURE_CLUTS_PER_PAGE	64		// clut table row of a texture page: D2 pages hold up to 32 textures, Driver 1 page 3 of Newcastle has 33
 #define D1_PED_SCALE_PERCENT	120		// Tanner and pedestrians are drawn this much bigger in D1 cities (drawing only)
 // D1 player car handling values (the D1 EXE has no per car table, all cars share them; the D2 code is the D1 code with lengths / 1.4648):
 // neutral power / traction / mass; twist rates 110 / 550 of D1 times 1.4648^2 for the D2 sized world (cosmetic.c)

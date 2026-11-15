@@ -420,7 +420,7 @@ void DrawSprites(PACKED_CELL_OBJECT** sprites, int numFound)
 #else
 	plotContext.ptexture_pages = (ushort(*)[128])texture_pages;
 #endif
-	plotContext.ptexture_cluts = (ushort(*)[128][32])texture_cluts;
+	plotContext.ptexture_cluts = (ushort(*)[128][TEXTURE_CLUTS_PER_PAGE])texture_cluts;
 	plotContext.polySizes = PolySizes;
 	plotContext.ot = current->ot;
 	plotContext.colour = spriteColour;

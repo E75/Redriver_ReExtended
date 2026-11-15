@@ -51,6 +51,8 @@ Undercover > D1 Missions lists the converted Driver 1 missions per city (each bu
 
 ## Set up (5 steps)
 
+Easiest: copy `tools\installer\Install_ReExtended.bat` and `.ps1` next to the exe and double-click the `.bat` (pick your Driver 2 / Driver 1, click Install, click Start game; see [tools/installer](tools/installer/README.md)). Manual steps:
+
 1. **Download** the zip from the [Releases page](https://github.com/E75/Redriver_ReExtended/releases) and unzip it.
 2. **Driver 2 (required):** copy everything of your Driver 2 disc 1 (`LEVELS`, `DATA`, `MISSIONS`, `SOUND`, ...) into the `DRIVER2` folder next to the exe, and the extra folders of disc 2 (for example `NLEVELS`). If Windows asks about existing files (`DATA`, `GFX`, `LANG`), keep the files of the zip. `DRIVER2\LEVELS\CHICAGO.LEV` must exist.
 3. **Driver 1 (optional):** copy the `LEVELS`, `DATA` and `MISSIONS` folders of your Driver 1 disc into a `DRIVER1` folder next to `DRIVER2`, plus the files `IVIEW.BIN` and `SOUND\VOICES.BLK` for the car park test (rules and voice).

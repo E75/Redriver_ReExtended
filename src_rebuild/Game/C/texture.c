@@ -113,7 +113,7 @@ char* texturename_buffer = NULL;
 int NoTextureMemory = 0;
 
 u_short texture_pages[128];
-u_short texture_cluts[128][32];
+u_short texture_cluts[128][TEXTURE_CLUTS_PER_PAGE];
 u_char tpageloaded[128];
 
 int MaxSpecCluts;
@@ -309,7 +309,9 @@ int LoadTPageAndCluts(RECT16 *tpage, RECT16 *cluts, int tpage2send, char *tpagea
 		LoadImage(cluts, (u_long*)tpageaddress);
 		tpageaddress += 32;
 
-		texture_cluts[tpage2send][i] = GetClut(cluts->x, cluts->y);
+		// [A] a Driver 1 page can hold more than 32 palettes (Newcastle page 3: 33); the 33rd used to spill into the first clut of the next page
+		if (i < TEXTURE_CLUTS_PER_PAGE)
+			texture_cluts[tpage2send][i] = GetClut(cluts->x, cluts->y);
 		
 		IncrementClutNum(cluts);
 	}
@@ -698,7 +700,7 @@ void LoadPermanentTPages(int *sector)
 
 	for (tloop = 0; tloop < 128; tloop++)
 	{
-		for (tset = 0; tset < 32; tset++)
+		for (tset = 0; tset < TEXTURE_CLUTS_PER_PAGE; tset++)
 			texture_cluts[tloop][tset] = GetClut(960, 16);
 	}
 
