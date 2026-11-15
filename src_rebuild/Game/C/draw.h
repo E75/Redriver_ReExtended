@@ -62,6 +62,7 @@ extern int PositionInViewCone(int x, int z, int spawnDist);	// a world position 
 extern int ObjectFade(int dist, int drawDist, int appearedFrame);	// 0..ONE, fade in after appearing, out at the draw distance
 extern void SetObjectFade(char* start, char* end, int fade);	// primitives written to [start, end) get this fade
 extern int LampDrawDistance(void);	// how far lamp posts (sprites) and their glows are drawn
+extern int gRoadReflect;			// 1 = lamp highlights and light pools on the road (needs gVolumeLights)
 extern int gVolumeLights;			// 1 = lamps and headlights light the air (night, fog, rain)
 extern void UpdateVolumeLights(void);
 extern int gAtmosphere;				// 1 = height fog in the low streets, fog glows towards the sun

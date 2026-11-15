@@ -1461,6 +1461,11 @@ void DisplayLightReflections(VECTOR* v1, CVECTOR* col, short size, TEXTURE_DETAI
 		return;	// no LIGHTREF texture in Newcastle and Training
 #endif
 
+#ifndef PSX
+	if (gRoadReflect)
+		return;	// [A] the road shader mirrors the lamps now (PsyX_SetRoadSpec)
+#endif
+
 	if (wet > 9 && v1->vy > camera_position.vy)
 	{
 		thiscol.r = col->r * wet >> 16;

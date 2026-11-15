@@ -2250,6 +2250,7 @@ int gNumDlights = 0;
 DLIGHT gLights[MAX_DLIGHTS];
 
 int gVolumeLights = 1;		// config.ini [render] volumeLights: lamps and headlights light the air at night, in fog and rain
+int gRoadReflect = 1;		// config.ini [render] roadReflect: lamp highlights and light pools on the road (needs the lamps of gVolumeLights)
 
 // squared view space distance in units of the light's reach; a headlight counts from the middle of its beam, so a car
 // lighting the player's car wins over cars lighting the road away from the camera
@@ -2506,6 +2507,9 @@ void UpdateVolumeLights(void)
 	}
 
 	PsyX_SetVolumeBeam(density);
+
+	// 0.15 on a dry road, 1 on a wet one (snow counts as half wet)
+	PsyX_SetRoadSpec(gRoadReflect && density > 0.0f ? 0.15f + 0.85f * (gSnowTarget ? 0.5f : wetness / 7000.0f) : 0.0f);
 
 	if (density <= 0.0f)
 	{
