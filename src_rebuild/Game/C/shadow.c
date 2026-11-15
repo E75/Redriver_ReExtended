@@ -620,7 +620,7 @@ void PlaceShadowForCar(VECTOR *shadowPoints, int subdiv, int zOfs, int flag, int
 
 	plotContext.primptr = current->primptr;
 	plotContext.ptexture_pages = (ushort(*)[128])texture_pages;
-	plotContext.ptexture_cluts = (ushort(*)[128][32])texture_cluts;
+	plotContext.ptexture_cluts = (ushort(*)[128][TEXTURE_CLUTS_PER_PAGE])texture_cluts;
 	plotContext.ot = current->ot + 10 + zOfs;
 	plotContext.flags = flag;
 	plotContext.colour = strength | (strength << 8) | (strength << 16) | 0x2e000000;

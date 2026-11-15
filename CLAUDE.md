@@ -31,6 +31,7 @@ Fork of REDRIVER2 (Driver 2 as PC C code, graphics layer PsyCross = PSX API on S
 - `src_rebuild/redriver2_psxpc.cpp` - PC entry: `config.ini`, command line options, startup (`D1Dlc_Detect`).
 - `src_rebuild/d1dlc/` - Driver 1 converter library: `lev_file` / `lev_writer` (level files), `d1_map`, `d1_roads`, `d1_height`, `d1_convert` (cities), `d1_missions` (missions, own stamp `MISSIONS.VER`). Bump `D1DLC_CONVERTER_VERSION` / `D1MISSION_VERSION` after any output change.
 - `src_rebuild/tools/d1conv/` - `D1Conv` CLI (`convert`, `probe`) and Python format scripts in `spike/`. `tools/` - `prepare_driver1.bat`, map editor, car editor, box analysis.
+- `tools/installer/` - player installer (`Install_ReExtended.bat` -> PowerShell + WinForms, no dependency): player picks Driver 2 / Driver 1 (folder, drive or .iso), it copies into `DRIVER2\` / `DRIVER1\` (never overwrites), runs `-nofmv -d1prepare`, then offers "Start game". Headless test: `-Auto -Driver2 <p> -Driver1 <p> -GameDir <copy>`. Keep its markers (`LEVELS\CHICAGO.LEV`, `LEVELS\MIAMI.LEV`) and the "Driver 1 prepare:" log lines in sync with `redriver2_psxpc.cpp`.
 - `docs/dev-notes/` - one note per feature (read section 0 first). Driver 1 missions: `d1-missions.md`, `d1-missions-pc-rosetta.md`; chase: `d1-chase-paths.md`; cities: `driver1-cities.md`; D1 vs D2: `driver1-d2-differences.md`.
 
 ## Repo rules

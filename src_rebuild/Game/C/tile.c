@@ -418,7 +418,7 @@ void DrawTILES(PACKED_CELL_OBJECT** tiles, int tile_amount)
 #else
 	plotContext.ptexture_pages = (ushort(*)[128])texture_pages;
 #endif
-	plotContext.ptexture_cluts = (ushort(*)[128][32])texture_cluts;
+	plotContext.ptexture_cluts = (ushort(*)[128][TEXTURE_CLUTS_PER_PAGE])texture_cluts;
 	plotContext.flags = 0;
 	plotContext.polySizes = PolySizes;
 

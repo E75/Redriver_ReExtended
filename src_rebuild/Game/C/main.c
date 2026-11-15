@@ -2701,6 +2701,10 @@ int redriver2_main(int argc, char** argv)
 
 			GameType = GAME_DRIVER1MISSION;
 			D1Missions_Available();
+			{
+				extern const char* D1Missions_LastLog();
+				printInfo("%s", D1Missions_LastLog());	// why a mission was not converted
+			}
 			SetState(STATE_GAMELAUNCH);
 		}
 		else if (!strcmp(argv[i], "-city"))
